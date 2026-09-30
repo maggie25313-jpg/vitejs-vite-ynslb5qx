@@ -11,6 +11,7 @@ import {
   FileText,
   Info,
   Package2,
+  Percent,
   ShieldCheck,
   Truck,
   TrendingDown,
@@ -135,8 +136,8 @@ const OPERATIONS_WIDGETS_BY_CLIENT: Record<
     unitsInPipeline: "14,620",
     receiveAccuracy: "98.1%",
     discrepancyCount: "7",
-    ordersReceived: "1,296",
-    despatchedWithinCutoff: "1,248",
+    ordersReceived: "5,063",
+    despatchedWithinCutoff: "4,072",
     totalDespatched: "1,318",
     shippedAccepted: "1,180",
     inTransit: "1,102",
@@ -1904,6 +1905,19 @@ function OperationsPage({
   onOpenDownloadModal: (reportKey: string) => void;
 }) {
   const metrics = getOperationsMetrics(client, deliveryView);
+  const ordersReceivedCount = Number(metrics.ordersReceived.replace(/,/g, ""));
+  const despatchedWithinCutoffCount = Number(metrics.despatchedWithinCutoff.replace(/,/g, ""));
+  const despatchOnTimeRate =
+    ordersReceivedCount > 0
+      ? `${((despatchedWithinCutoffCount / ordersReceivedCount) * 100).toFixed(2)}%`
+      : "0.00%";
+
+  const returnsCount = Number(metrics.returns.replace(/,/g, ""));
+  const totalDespatchedCount = Number(metrics.totalDespatched.replace(/,/g, ""));
+  const returnsVsDespatchedRate =
+    totalDespatchedCount > 0
+      ? `${Math.floor((returnsCount / totalDespatchedCount) * 1000) / 10}%`
+      : "0.0%";
 
   const statusOverview = [
     { label: "Despatched", value: Number(metrics.totalDespatched.replace(/,/g, "")), color: "bg-sky-500" },
@@ -1978,25 +1992,28 @@ function OperationsPage({
         <div className="h-px flex-1 bg-slate-200" />
       </div>
 
-      <div className="grid items-stretch gap-3" style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))" }}>
+      <div className="grid items-stretch gap-3" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
         <StatCard
-          label="Orders received (released within cut off)"
+          label="Orders received (within cut-off)"
           value={metrics.ordersReceived}
           meta="Eligible DoT order population"
           tone="neutral"
           icon={Package2}
-          tooltip="Orders released to the operation within the configured cut-off period."
+          tooltip="Orders released to the operation before the configured cut-off."
           onDownload={() => onOpenDownloadModal("delivery_status_snapshot")}
         />
         <StatCard
-          label="Orders despatched (within cut off)"
+          label="Despatched (within cut-off)"
           value={metrics.despatchedWithinCutoff}
           meta="Despatched on time"
           tone="neutral"
-          icon={Package2}
-          tooltip="Orders from the eligible released population that were despatched within the expected despatch deadline."
+          icon={Clock3}
+          tooltip="Eligible orders despatched before the 01:00 operational deadline."
           onDownload={() => onOpenDownloadModal("delivery_status_snapshot")}
         />
+      </div>
+
+      <div className="grid items-stretch gap-3" style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))" }}>
         <StatCard
           label="Total Despatched"
           value={metrics.totalDespatched}
@@ -2015,9 +2032,6 @@ function OperationsPage({
           tooltip="Parcels accepted into the carrier network."
           onDownload={() => onOpenDownloadModal("shipped_accepted_ageing")}
         />
-      </div>
-
-      <div className="grid items-stretch gap-3" style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))" }}>
         <StatCard
           label="In transit"
           value={metrics.inTransit}
@@ -2036,6 +2050,9 @@ function OperationsPage({
           tooltip="Parcels currently marked as out for delivery by the carrier."
           onDownload={() => onOpenDownloadModal("delivery_status_snapshot")}
         />
+      </div>
+
+      <div className="grid items-stretch gap-3" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
         <StatCard
           label="Delivered"
           value={metrics.delivered}
@@ -2052,6 +2069,18 @@ function OperationsPage({
           tone="softWarning"
           icon={RotateCcw}
           tooltip="Orders that could not be delivered and have been returned to sender."
+          onDownload={() => onOpenDownloadModal("delivery_status_snapshot")}
+        />
+      </div>
+
+      <div className="grid items-stretch gap-3" style={{ gridTemplateColumns: "1fr" }}>
+        <StatCard
+          label="Despatch on Time (DoT)"
+          value={despatchOnTimeRate}
+          meta="Despatched within cut-off vs orders received within cut-off"
+          tone="neutral"
+          icon={Percent}
+          tooltip="Percentage of eligible orders received within cut-off that were despatched on time."
           onDownload={() => onOpenDownloadModal("delivery_status_snapshot")}
         />
       </div>
@@ -2074,7 +2103,7 @@ function OperationsPage({
         />
         <StatCard
           label="Returns vs despatched"
-          value={metrics.returnsVsDespatched}
+          value={returnsVsDespatchedRate}
           meta="Return rate"
           tone="softWarning"
           icon={TrendingDown}
