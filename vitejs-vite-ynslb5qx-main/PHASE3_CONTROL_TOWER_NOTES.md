@@ -9,7 +9,8 @@ This version changes **only the Control Tower tab**. Existing Inventory Health, 
 - Orders by channel: Shopify, Amazon, Bulk Upload, Other.
 - Cost per order (fulfilment + shipping), with Domestic / International / By Country filtering, and illustrative cost per pick.
 - Orders Despatched volume trend.
-- Future-scope areas: Exceptions & reconciliation, B2B/kitting, Packaging, Customer Service.
+- The bottom **Additional operational insights** and **Spike billing integration** information panels have been removed from the Control Tower layout.
+- Delivery on Time and Damaged/Quarantine KPI cards use an amber background and display no data while their integrations remain pending.
 - Client selector (existing global control), date presets 7/14/30/60 days, custom range up to 180 days, yesterday as maximum selectable day, sample CSV export.
 
 ## Data source / reliability
@@ -25,7 +26,9 @@ Before launch, source charges from **Spike** with client-specific contracts/rate
 - Cost per Order: agreed actual fulfilment + shipping charges for the selected despatched orders divided by matching order count; confirm treatment of fuel/return surcharges, credits, tax and adjustments.
 - Cost per Pick: needs actual picks/units and allocation logic. The demo assumes 1.6 picks per order for presentation purposes only.
 - Destination cost: use actual shipping destination country, service and rate/cost, not static assumptions.
-- Delivery On Time, Damaged/Quarantine and Backorders: placeholders/illustrative until data definition and sources are confirmed.
+- Delivery on Time: no data until **GECO** integration and agreed carrier SLA definitions are available.
+- Damaged/Quarantine: no data until the separate **stock reclassification** work is implemented.
+- Backorders: illustrative until data definition and sources are confirmed.
 
 ## Deployment
 

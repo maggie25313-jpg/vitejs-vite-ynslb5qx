@@ -2,19 +2,13 @@ import React, { useMemo, useState } from "react";
 import {
   AlertTriangle,
   ArrowDownToLine,
-  Boxes,
   CalendarDays,
-  CheckCircle2,
-  ChevronRight,
   CircleHelp,
   Clock3,
-  CreditCard,
   FileSpreadsheet,
-  Layers3,
   Package2,
   Percent,
   PoundSterling,
-  ShieldCheck,
   ShoppingCart,
   Truck,
   Warehouse,
@@ -213,16 +207,16 @@ function TowerKpi({
   tooltip: string;
 }) {
   return (
-    <div className="group relative flex min-h-[132px] flex-col justify-between border border-slate-200 border-l-[3px] border-l-blue-600 bg-white px-4 py-3.5 shadow-[0_7px_20px_rgba(31,51,78,0.07)]">
+    <div className={`group relative flex min-h-[132px] flex-col justify-between border border-l-[3px] px-4 py-3.5 shadow-[0_7px_20px_rgba(31,51,78,0.07)] ${future ? "border-amber-200 border-l-amber-500 bg-amber-50" : "border-slate-200 border-l-blue-600 bg-white"}`}>
       <div className="flex items-start justify-between gap-2">
-        <div className="max-w-[205px] text-[10px] font-bold uppercase leading-4 tracking-[0.06em] text-indigo-500">{label}</div>
-        <Icon className="h-6 w-6 shrink-0 text-slate-300" />
+        <div className={`max-w-[205px] text-[10px] font-bold uppercase leading-4 tracking-[0.06em] ${future ? "text-amber-800" : "text-indigo-500"}`}>{label}</div>
+        <Icon className={`h-6 w-6 shrink-0 ${future ? "text-amber-400" : "text-slate-300"}`} />
       </div>
       <div className="mt-2 flex items-baseline gap-2">
-        <span className={`text-[25px] font-semibold leading-none tracking-tight ${future ? "text-slate-400" : "text-slate-900"}`}>{value}</span>
-        {future && <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Planned</span>}
+        <span className={`text-[25px] font-semibold leading-none tracking-tight ${future ? "text-amber-800" : "text-slate-900"}`}>{value}</span>
+        {future && <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">No data</span>}
       </div>
-      <div className="mt-2 text-xs leading-4 text-slate-500">{detail}</div>
+      <div className={`mt-2 text-xs leading-4 ${future ? "text-amber-800" : "text-slate-500"}`}>{detail}</div>
       <span className="pointer-events-none absolute left-0 top-full z-30 mt-2 hidden w-64 border border-slate-200 bg-white p-3 text-xs leading-5 text-slate-600 shadow-lg group-hover:block group-focus-within:block">
         {tooltip}
       </span>
@@ -399,10 +393,10 @@ export default function ControlTower({ client }: { client: TowerClient }) {
           tooltip="Illustrative DoT. Live calculation should use Expected Despatch to determine due day and check actual despatch against the agreed operational deadline." />
         <TowerKpi label="Fill rate" value={`${data.fillRate.toFixed(2)}%`} detail="Orders fulfilled without shortfall" icon={Percent}
           tooltip="Illustrative order fill rate. Final definition should be confirmed with Operations, including partial shipments and backorders." />
-        <TowerKpi label="Delivery on time" value="—" detail="Carrier SLA data required" icon={Truck} future
-          tooltip="Planned metric, subject to reliable carrier delivery events, expected delivery dates and defined exclusions." />
-        <TowerKpi label="Damaged / quarantine" value="—" detail="Stock classification pending" icon={AlertTriangle} future
-          tooltip="Planned visibility of damaged or quarantined stock units and value; not connected in this demo." />
+        <TowerKpi label="Delivery on time" value="—" detail="GECO integration planned" icon={Truck} future
+          tooltip="No data yet. Delivery on time will be added when GECO integration is available and carrier delivery targets are agreed." />
+        <TowerKpi label="Damaged / quarantine" value="—" detail="Stock reclassification planned" icon={AlertTriangle} future
+          tooltip="No data yet. Damaged and quarantine stock reporting will follow the separate stock reclassification task." />
         <TowerKpi label="Backorders" value={count(data.backorders)} detail="Illustrative outstanding orders" icon={ShoppingCart}
           tooltip="Demonstration only. Live backorder count requires agreed WMS status rules and eligibility criteria." />
       </div>
@@ -523,40 +517,6 @@ export default function ControlTower({ client }: { client: TowerClient }) {
         </TowerPanel>
       </div>
 
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
-        <TowerPanel title="Additional operational insights" detail="Future Control Tower reporting areas" className="xl:col-span-8">
-          <div className="grid gap-3 sm:grid-cols-2">
-            {[
-              { icon: AlertTriangle, name: "Exceptions & reconciliation", desc: "Stock investigations, exceptions and reconciliation progress" },
-              { icon: Boxes, name: "B2B & kitting", desc: "Bulk orders, kitting activity and handling costs" },
-              { icon: Layers3, name: "Packaging & stock handling", desc: "Packaging consumption and quarantine visibility" },
-              { icon: ShieldCheck, name: "Customer service metrics", desc: "Issues, resolution performance and client enquiries" },
-            ].map(item => (
-              <div key={item.name} className="flex gap-3 border border-slate-200 bg-slate-50 p-3">
-                <item.icon className="mt-0.5 h-5 w-5 shrink-0 text-slate-400" />
-                <div className="min-w-0">
-                  <div className="text-xs font-semibold text-slate-800">{item.name}</div>
-                  <p className="mt-1 text-[11px] leading-4 text-slate-500">{item.desc}</p>
-                  <span className="mt-2 inline-block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Future scope</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </TowerPanel>
-        <TowerPanel title="Spike billing integration" detail="Source for real client-specific financial data" className="xl:col-span-4"
-          right={<CreditCard className="h-5 w-5 text-slate-400" />}>
-          <div className="space-y-3 text-xs leading-5 text-slate-600">
-            <div className="flex items-center gap-2 font-semibold text-amber-700"><AlertTriangle className="h-4 w-4" /> Not connected in demo</div>
-            <p>Financial figures shown here are sample values generated from illustrative client rates. They are <strong>not live Spike charges or invoices</strong>.</p>
-            <div className="space-y-1 border-t border-slate-100 pt-3">
-              <div className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-slate-400" /> UI and cost formulas prepared</div>
-              <div className="flex items-center gap-2"><ChevronRight className="h-3.5 w-3.5 text-slate-400" /> Spike rate cards / invoice line items needed</div>
-              <div className="flex items-center gap-2"><ChevronRight className="h-3.5 w-3.5 text-slate-400" /> Map each charge to order, client and country</div>
-            </div>
-            <div className="flex items-center gap-1.5 text-slate-400"><FileSpreadsheet className="h-4 w-4" /> Demo CSV export is available above.</div>
-          </div>
-        </TowerPanel>
-      </div>
       <div className="pb-3 text-[11px] text-slate-400">Phase 3 concept · Sample data for initial layout review only. No live Spike or WMS feeds are connected to this Control Tower mock-up.</div>
     </div>
   );
