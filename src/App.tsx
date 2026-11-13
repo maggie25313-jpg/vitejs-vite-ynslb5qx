@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import ControlTower from "./ControlTower";
 import {
   AlertTriangle,
   ArrowDownToLine,
@@ -242,7 +243,7 @@ const ACCESS_TABS: Record<AccessLevel, PageKey[]> = {
 };
 
 const TAB_LABELS: Record<PageKey, string> = {
-  control: "Control Tower (Phase 4)",
+  control: "Control Tower (Phase 3)",
   operations: "Inbound / Delivery (Phase 2)",
   status: "Inventory Health (Phase 1)",
   data: "Data Hub (Phase 1)",
@@ -2602,7 +2603,6 @@ function DataHubPage({
 export default function App() {
   const [page, setPage] = useState<PageKey>("control");
   const [client, setClient] = useState<ClientKey>("startup");
-  const [controlCenterRange, setControlCenterRange] = useState<ControlRange>("30");
   const [inventoryWidgetRange, setInventoryWidgetRange] = useState<InventoryWidgetRange>("30d");
   const [deliveryView, setDeliveryView] = useState<DeliveryView>("last24h");
   const [accessLevel, setAccessLevel] = useState<AccessLevel>("manager");
@@ -2664,7 +2664,6 @@ export default function App() {
           <div className="flex flex-wrap items-start gap-3">
             {page === "control" ? (
               <div className="flex flex-col gap-2">
-                <SelectControl value={controlCenterRange} onChange={(value) => setControlCenterRange(value as ControlRange)} options={controlCenterRangeOptions} />
                 <SelectControl value={client} onChange={(value) => setClient(value as ClientKey)} options={CLIENT_OPTIONS} />
                 <SelectControl value={accessLevel} onChange={(value) => setAccessLevel(value as AccessLevel)} options={ACCESS_OPTIONS} />
               </div>
@@ -2683,7 +2682,7 @@ export default function App() {
         </div>
 
         {page === "control" && accessLevel === "manager" ? (
-          <ControlCenterPage client={client} selectedRange={controlCenterRange} onOpenDownloadModal={openDownloadModal} jumpToReport={jumpToReport} />
+          <ControlTower client={client} />
         ) : null}
 
         {page === "operations" && (accessLevel === "manager" || accessLevel === "inboundDelivery") ? (
