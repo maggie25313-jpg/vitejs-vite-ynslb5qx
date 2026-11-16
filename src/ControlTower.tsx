@@ -481,15 +481,16 @@ export default function ControlTower({ client }: { client: TowerClient }) {
           tooltip="Demonstration only. Live backorder count requires agreed WMS status rules and eligibility criteria." />
       </div>
 
-      <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-12">
-        <TowerPanel title="Invoice breakdown" detail="Illustrative invoiced charges by category over time" className="xl:col-span-7"
+      {/* Invoice and per-order metrics share one aligned row. CS queries takes a full row below. */}
+      <div className="grid grid-cols-1 items-stretch gap-5 xl:grid-cols-12">
+        <TowerPanel title="Invoice breakdown" detail="Illustrative invoiced charges by category over time" className="h-full xl:col-span-8"
           right={<div className="flex flex-wrap items-center justify-end gap-4">
             <label className="inline-flex cursor-pointer items-center gap-2 border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700" title="Demo setting: production will use client configuration">
               <input type="checkbox" checked={kittingEnabled} onChange={e => setKittingEnabled(e.target.checked)} className="h-4 w-4 accent-blue-600" /> Kitting enabled
             </label>
             <div className="text-right"><div className="text-[10px] uppercase tracking-wide text-slate-400">Total charges</div><div className="text-lg font-semibold text-slate-900">{GBP0.format(data.totalCharges)}</div></div>
           </div>}>
-          <div className="h-[300px] min-w-0">
+          <div className="h-[275px] min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data.periods} margin={{ top: 8, right: 10, bottom: 15, left: 5 }}>
                 <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
@@ -516,69 +517,65 @@ export default function ControlTower({ client }: { client: TowerClient }) {
           <div className="mt-3 text-[11px] text-slate-500">Invoice categories are separate from the per-order fulfilment + shipping rate.</div>
         </TowerPanel>
 
-        <div className="flex min-w-0 flex-col gap-5 xl:col-span-5">
-          <TowerPanel title="Per order breakdown" detail="Directly attributable costs · highest first"
-            right={<div className="text-right"><div className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Total / order</div><div className="text-2xl font-semibold tracking-tight text-slate-900">{money(data.costPerOrder)}</div></div>}>
-            <div className="mb-4 rounded-sm border border-blue-100 bg-blue-50/60 px-3.5 py-3">
-              <div className="flex items-center justify-between gap-2 text-[11px] text-slate-600">
-                <span className="font-medium">FF + shipping allocation</span>
-                <span>{count(data.orders)} orders</span>
-              </div>
-              <div className="mt-2.5 flex h-4 w-full overflow-hidden rounded-sm bg-slate-100" role="img" aria-label="Pick and pack and shipping proportions of average cost per order">
-                {data.breakdown.map(item => (
-                  <div key={item.key} style={{ width: `${data.totalFFShipping ? item.amount / data.totalFFShipping * 100 : 0}%`, backgroundColor: item.color }} title={`${item.label}: ${money(item.displayValue)}`} />
-                ))}
-              </div>
+        <TowerPanel title="Per order breakdown" detail="Directly attributable costs · highest first" className="h-full xl:col-span-4"
+          right={<div className="text-right"><div className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Total / order</div><div className="text-2xl font-semibold tracking-tight text-slate-900">{money(data.costPerOrder)}</div></div>}>
+          <div className="mb-4 rounded-sm border border-blue-100 bg-blue-50/60 px-3.5 py-3">
+            <div className="flex items-center justify-between gap-2 text-[11px] text-slate-600">
+              <span className="font-medium">FF + shipping allocation</span>
+              <span>{count(data.orders)} orders</span>
             </div>
-            <div className="space-y-4">
-              {data.breakdown.map((item, rank) => {
-                const share = data.totalFFShipping ? item.amount / data.totalFFShipping * 100 : 0;
-                return (
-                  <div key={item.key} className="flex items-start gap-3">
-                    <span className="pt-0.5 text-xs font-semibold tabular-nums text-slate-400">{String(rank + 1).padStart(2, "0")}</span>
-                    <div className="min-w-0 flex-1">
-                      <div className="mb-1.5 flex items-center justify-between gap-2">
-                        <span className="text-xs font-semibold text-slate-800">{item.label}</span>
-                        <span className="text-sm font-semibold tabular-nums text-slate-900">{money(item.displayValue)}</span>
-                      </div>
-                      <div className="h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full" style={{ width: `${share}%`, backgroundColor: item.color }} /></div>
-                      <div className="mt-1 text-right text-[11px] tabular-nums text-slate-400">{share.toFixed(1)}%</div>
+            <div className="mt-2.5 flex h-4 w-full overflow-hidden rounded-sm bg-slate-100" role="img" aria-label="Pick and pack and shipping proportions of average cost per order">
+              {data.breakdown.map(item => (
+                <div key={item.key} style={{ width: `${data.totalFFShipping ? item.amount / data.totalFFShipping * 100 : 0}%`, backgroundColor: item.color }} title={`${item.label}: ${money(item.displayValue)}`} />
+              ))}
+            </div>
+          </div>
+          <div className="space-y-4">
+            {data.breakdown.map((item, rank) => {
+              const share = data.totalFFShipping ? item.amount / data.totalFFShipping * 100 : 0;
+              return (
+                <div key={item.key} className="flex items-start gap-3">
+                  <span className="pt-0.5 text-xs font-semibold tabular-nums text-slate-400">{String(rank + 1).padStart(2, "0")}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-1.5 flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-slate-800">{item.label}</span>
+                      <span className="text-sm font-semibold tabular-nums text-slate-900">{money(item.displayValue)}</span>
                     </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full" style={{ width: `${share}%`, backgroundColor: item.color }} /></div>
+                    <div className="mt-1 text-right text-[11px] tabular-nums text-slate-400">{share.toFixed(1)}%</div>
                   </div>
-                );
-              })}
-            </div>
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-xs">
-              <span className="text-slate-500">Cost per pick <strong className="ml-1 text-slate-900">{money(data.costPerPick)}</strong></span>
-              <span className="text-[11px] text-slate-400">Demo: 1.6 picks / order</span>
-            </div>
-          </TowerPanel>
-
-          <TowerPanel title="CS Queries" detail="Illustrative client service issues raised in the selected period"
-            right={<div className="text-right"><div className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Total cases</div><div className="text-2xl font-semibold tracking-tight text-slate-900">{count(data.csTotal)}</div></div>}>
-            <div className="space-y-3.5">
-              {data.csQueries.map((issue, rank) => {
-                const share = data.csTotal ? issue.total / data.csTotal * 100 : 0;
-                return (
-                  <div key={issue.label} className="flex items-center gap-3">
-                    <span className="w-4 shrink-0 text-[11px] font-semibold tabular-nums text-slate-400">{rank + 1}</span>
-                    <div className="min-w-0 flex-1">
-                      <div className="mb-1 flex items-center justify-between gap-2 text-xs">
-                        <span className="font-medium text-slate-700">{issue.label}</span>
-                        <span className="shrink-0 font-semibold tabular-nums text-slate-900">{count(issue.total)}</span>
-                      </div>
-                      <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-                        <div className="h-full rounded-full" style={{ width: `${share}%`, backgroundColor: issue.color }} />
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="mt-4 border-t border-slate-100 pt-3 text-[11px] text-slate-500">Counts change with the date range. Categories will be mapped to CS ticket data in a future integration.</div>
-          </TowerPanel>
-        </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-xs">
+            <span className="text-slate-500">Cost per pick <strong className="ml-1 text-slate-900">{money(data.costPerPick)}</strong></span>
+            <span className="text-[11px] text-slate-400">Demo: 1.6 picks / order</span>
+          </div>
+        </TowerPanel>
       </div>
+
+      <TowerPanel title="CS Queries" detail="Client service issues raised in the selected period"
+        right={<div className="text-right"><div className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Total cases</div><div className="text-2xl font-semibold tracking-tight text-slate-900">{count(data.csTotal)}</div></div>}>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          {data.csQueries.map((issue, rank) => {
+            const share = data.csTotal ? issue.total / data.csTotal * 100 : 0;
+            return (
+              <div key={issue.label} className="min-w-0 border border-slate-200 bg-slate-50/70 px-4 py-4">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-semibold tabular-nums text-slate-400">{String(rank + 1).padStart(2, "0")}</span>
+                  <span className="text-[11px] font-medium tabular-nums text-slate-500">{share.toFixed(1)}% of queries</span>
+                </div>
+                <div className="mt-2 min-h-[38px] text-xs font-semibold leading-5 text-slate-700">{issue.label}</div>
+                <div className="mt-1 text-2xl font-semibold tabular-nums tracking-tight text-slate-900">{count(issue.total)}</div>
+                <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-200" role="img" aria-label={`${issue.label}: ${share.toFixed(1)} percent of all queries`}>
+                  <div className="h-full rounded-full" style={{ width: `${share}%`, backgroundColor: issue.color }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </TowerPanel>
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
         <TowerPanel title="Cost per order (FF + shipping)" detail="Average fulfilment + shipping cost for each destination country" className="xl:col-span-7"
