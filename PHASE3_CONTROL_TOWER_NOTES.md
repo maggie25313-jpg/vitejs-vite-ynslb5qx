@@ -1,40 +1,31 @@
-# Control Tower — Phase 3 demo
+# Control Tower — Phase 3 demo (v4)
 
-This version changes **only the Control Tower tab**. Existing Inventory Health, Inbound/Delivery and Data Hub pages are retained.
+This update changes **only the Control Tower tab**. Inventory Health, Inbound/Delivery, and Data Hub remain unchanged.
 
-## What's in the demo
+## Included in this version
 
-- Eight headline KPI positions: Stock Held (GBP), Orders Despatched, Cost per Order, Warehouse DoT, Fill Rate, Delivery on Time, Damaged/Quarantine, Backorders.
-- Stacked invoice charges over time: Storage, Pick & Pack, Shipping, Inbound, Kitting (when enabled), Other.
-- Kitting enabled/disabled checkbox next to the invoice chart is a demo-only substitute for a future client setting. It updates invoice totals, the chart and the per-order breakdown.
-- A ranked, visual **Per order breakdown** replaces Orders by Channel. It shows Shipping, Pick & Pack, Storage, Inbound, Kitting and Other cost per order, highest to lowest, with a weighted stacked bar and illustrative cost per pick.
-- Storage / Inbound / Kitting averages are recalculated from period charges and order volumes as date filters change (7 / 14 / 30 / 60 days or custom).
-- Cost per order (fulfilment + shipping) by **all** countries, without domestic/international chart filter; illustrative UK and International summary cards remain.
-- Orders Despatched volume trend.
-- The bottom **Additional operational insights** and **Spike billing integration** information panels, plus the bottom concept disclaimer, have been removed from the Control Tower layout.
-- Delivery on Time and Damaged/Quarantine KPI cards use an amber background and display no data while their integrations remain pending.
-- Client selector (existing global control), date presets 7/14/30/60 days, custom range up to 180 days, yesterday as maximum selectable day, sample CSV export.
+- Eight headline KPIs. **Cost per order** is fulfilment (pick & pack) + shipping only.
+- **Per order breakdown** now contains only those two directly attributable charges, ranked highest first. Its two displayed amounts add up exactly to the Cost per order KPI, to the penny.
+- A new **CS Queries** panel underneath Per order breakdown, with illustrative counts for delivery enquiries, undelivered parcels, returns/RTS, lost-in-network, and damaged-delivery queries. Counts follow the selected date range and client.
+- Stacked **Orders despatched** chart segmented by Amazon, Shopify, eBay, TikTok, and Bulk upload. Every period's channel counts sum to its order total; the chart also shows a clearly aligned channel colour key.
+- Stacked **Invoice breakdown** continues to show Storage, Pick & Pack, Shipping, Inbound, Kitting, and Other as total invoice charges (not per-order allocations). Its colour key now appears underneath in neat, aligned cells with corresponding category totals. Kitting disappears from the chart **and its colour key** when unchecked.
+- Kitting toggle is a demo-only proxy for future client settings. Kitting changes invoice totals, but correctly does **not** affect Cost per order, because kitting is no longer included in that metric.
+- **Cost per order by country** displays all example countries separately: United Kingdom, Netherlands, Germany, France, Ireland and Spain. There is no combined Other category or domestic/international filter.
+- Delivery on Time and Damaged/Quarantine remain yellow placeholders with no values pending GECO and stock reclassification respectively.
+- Existing date presets (7, 14, 30, 60 days), custom date filtering, client selector and CSV export retained. The CSV now includes the CS breakdown and despatched channel splits.
 
-## Data source / reliability
+## Important production notes
 
-**No API integration is included.** All numbers on Control Tower are clearly labelled **demonstration data** and generated locally to show the layout and filter interactions. The sample rate cards in `src/ControlTower.tsx` are fictional and must not be used for real client billing.
+**No real data or Spike billing integration is included.** Illustrative figures and rates are generated locally. Reconcile costs with client-specific Spike rates and actual invoice lines before production.
 
-Before launch, source charges from **Spike** with client-specific contracts/rate-card effective dates and, ideally, actual invoice line items / adjustments.
+- Storage, inbound, kitting and other costs are invoice-category charges but **not** part of the per-order fulfilment + shipping breakdown.
+- CS queries are synthetic in this demo. Live ticket/issue source, deduplication and definitions must be agreed.
+- Channel data is synthetic. Production should map WMS order source/channel fields.
+- DoT should use the agreed Expected Despatch/operational deadline policy and must include missed/undispatched eligible orders.
+- Cost-per-country must use actual destination countries rather than a generic "Other" grouping.
 
-- Stock Value: current WMS inventory quantity × SKU cost, with clear exclusions and currency conversion policy.
-- Orders Despatched: WMS event data, grouped by actual despatch date/time for this reporting trend.
-- DoT: align the reporting cohort to **Expected Despatch** date (if this is the authoritative WMS cut-off assignment) and compare actual despatch against the operational deadline; include eligible orders that never despatched.
-- Fill Rate: agree on order-line/units vs complete-order definition, partial shipments and backorders before implementing.
-- Cost per Order KPI: agreed actual fulfilment + shipping charges for the selected despatched orders divided by matching order count; confirm treatment of fuel/return surcharges, credits, tax and adjustments.
-- Per-order breakdown: category charges (including storage/inbound/kitting) divided by period despatched orders; this is an illustrative allocation model and needs agreement on true Spike charge allocation and timing. The all-in breakdown total is distinct from the FF + shipping-only KPI.
-- Cost per Pick: needs actual picks/units and allocation logic. The demo assumes 1.6 picks per order for presentation purposes only.
-- Destination cost: use actual shipping destination country, service and rate/cost, not static assumptions.
-- Delivery on Time: no data until **GECO** integration and agreed carrier SLA definitions are available.
-- Damaged/Quarantine: no data until the separate **stock reclassification** work is implemented.
-- Backorders: illustrative until data definition and sources are confirmed.
+## Deploying
 
-## Deployment
+This ZIP is **root-flat**, matching the repository root layout shown in GitHub. Upload the project files directly into the repository root (including `src` and `public`). In Vercel, leave Root Directory at `./`.
 
-The project retains the existing Vite / React structure. Replace the files in the repository with the contents of this ZIP; keep `src/ControlTower.tsx` alongside `src/App.tsx`.
-
-Run `npm ci` and `npm run build` in a normal development environment, then redeploy Vercel from GitHub. No new npm package dependencies were added.
+Run `npm ci` and `npm run build` in your normal environment, then redeploy Vercel. No new npm dependencies were introduced. The TypeScript syntax was validated, but a full npm/Vite build was not possible in this environment.

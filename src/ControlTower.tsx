@@ -41,7 +41,8 @@ const demoClient: Record<TowerClient, {
   shippingNL: number;
   shippingDE: number;
   shippingFR: number;
-  shippingOther: number;
+  shippingIE: number;
+  shippingES: number;
   storageDaily: number;
   inboundPerOrder: number;
   kittingPerKittedOrder: number;
@@ -50,19 +51,19 @@ const demoClient: Record<TowerClient, {
   startup: {
     label: "Startup Ltd", multiplier: 1, stockValue: 1500000,
     pickPack: 1.68, packaging: 0.23, shippingUK: 2.91, shippingNL: 5.52,
-    shippingDE: 5.94, shippingFR: 6.12, shippingOther: 7.38,
+    shippingDE: 5.94, shippingFR: 6.12, shippingIE: 5.75, shippingES: 6.58,
     storageDaily: 88, inboundPerOrder: 0.31, kittingPerKittedOrder: 1.18, otherPerOrder: 0.14,
   },
   test: {
     label: "Test Account Ltd", multiplier: 0.78, stockValue: 1080000,
     pickPack: 1.82, packaging: 0.19, shippingUK: 3.10, shippingNL: 5.81,
-    shippingDE: 6.13, shippingFR: 6.35, shippingOther: 7.68,
+    shippingDE: 6.13, shippingFR: 6.35, shippingIE: 6.01, shippingES: 6.91,
     storageDaily: 64, inboundPerOrder: 0.27, kittingPerKittedOrder: 1.36, otherPerOrder: 0.18,
   },
   api: {
     label: "API Test Ltd", multiplier: 1.26, stockValue: 1850000,
     pickPack: 1.53, packaging: 0.22, shippingUK: 2.76, shippingNL: 5.40,
-    shippingDE: 5.75, shippingFR: 5.89, shippingOther: 7.12,
+    shippingDE: 5.75, shippingFR: 5.89, shippingIE: 5.61, shippingES: 6.39,
     storageDaily: 108, inboundPerOrder: 0.28, kittingPerKittedOrder: 1.09, otherPerOrder: 0.16,
   },
 };
@@ -75,9 +76,23 @@ const financeColors: Record<InvoicePart, string> = {
   kitting: "#a855f7",
   other: "#f59e0b",
 };
-const countryShares = [0.71, 0.12, 0.08, 0.06, 0.03];
-const countryLabels = ["United Kingdom", "Netherlands", "Germany", "France", "Other"];
-const countryCodes = ["UK", "NL", "DE", "FR", "Other"];
+const countryShares = [0.64, 0.12, 0.08, 0.06, 0.055, 0.045];
+const countryLabels = ["United Kingdom", "Netherlands", "Germany", "France", "Ireland", "Spain"];
+const countryCodes = ["UK", "NL", "DE", "FR", "IE", "ES"];
+const orderChannels = [
+  { key: "amazon", label: "Amazon", color: "#4f46e5" },
+  { key: "shopify", label: "Shopify", color: "#22a06b" },
+  { key: "ebay", label: "eBay", color: "#0ea5e9" },
+  { key: "tiktok", label: "TikTok", color: "#f59e0b" },
+  { key: "bulkUpload", label: "Bulk upload", color: "#94a3b8" },
+] as const;
+const csQueryTypes = [
+  { label: "Delivery enquiries", share: 0.019, color: "#2563eb" },
+  { label: "Undelivered parcels", share: 0.012, color: "#f59e0b" },
+  { label: "Returns / RTS", share: 0.010, color: "#64748b" },
+  { label: "Lost in network", share: 0.006, color: "#d946ef" },
+  { label: "Damaged deliveries", share: 0.004, color: "#e87950" },
+] as const;
 const invoicePartLabels: Record<InvoicePart, string> = {
   storage: "Storage", pickPack: "Pick & pack", shipping: "Shipping", inbound: "Inbound", kitting: "Kitting", other: "Other",
 };
@@ -111,6 +126,11 @@ function createSample(client: TowerClient, startDate: Date, dayCount: number, ki
     label: string;
     orders: number;
     days: number;
+    amazon: number;
+    shopify: number;
+    ebay: number;
+    tiktok: number;
+    bulkUpload: number;
     storage: number;
     pickPack: number;
     shipping: number;
@@ -122,7 +142,7 @@ function createSample(client: TowerClient, startDate: Date, dayCount: number, ki
   const blendedShipping = (
     rates.shippingUK * countryShares[0] + rates.shippingNL * countryShares[1]
     + rates.shippingDE * countryShares[2] + rates.shippingFR * countryShares[3]
-    + rates.shippingOther * countryShares[4]
+    + rates.shippingIE * countryShares[4] + rates.shippingES * countryShares[5]
   );
   let daysUsed = 0;
 
@@ -134,7 +154,8 @@ function createSample(client: TowerClient, startDate: Date, dayCount: number, ki
     const from = offsetDate(startDate, daysUsed);
     const until = offsetDate(from, days - 1);
     const period = {label: days === 1 ? friendlyDate(from) : `${friendlyDate(from)}–${friendlyDate(until)}`,
-      orders: 0, days, storage: 0, pickPack: 0, shipping: 0, inbound: 0, kitting: 0, other: 0, total: 0};
+      orders: 0, days, amazon: 0, shopify: 0, ebay: 0, tiktok: 0, bulkUpload: 0,
+      storage: 0, pickPack: 0, shipping: 0, inbound: 0, kitting: 0, other: 0, total: 0};
     for (let d = 0; d < days; d++) {
       const date = offsetDate(from, d);
       const ordinal = Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86400000);
@@ -150,6 +171,22 @@ function createSample(client: TowerClient, startDate: Date, dayCount: number, ki
       const dailyKitting = kittingEnabled ? Math.round(orders * kittingShare) * rates.kittingPerKittedOrder : 0;
       const dailyOther = orders * rates.otherPerOrder * (1 + 0.08 * Math.cos(ordinal / 9.1));
       period.orders += orders;
+      // Allocate each day's despatches across channels. Every chart segment
+      // comes from the same order population, so stacks equal the daily total.
+      const channelWeights = [
+        0.36 + 0.035 * Math.sin(ordinal / 13.3),
+        0.29 + 0.030 * Math.cos(ordinal / 8.1),
+        0.17 + 0.020 * Math.sin(ordinal / 7.2),
+        0.11 + 0.014 * Math.cos(ordinal / 5.3),
+      ];
+      let channelAllocated = 0;
+      orderChannels.forEach((channel, index) => {
+        const channelOrders = index === orderChannels.length - 1
+          ? orders - channelAllocated
+          : Math.round(orders * channelWeights[index]);
+        period[channel.key] += channelOrders;
+        channelAllocated += channelOrders;
+      });
       period.storage += dailyStorage;
       period.pickPack += dailyPickPack;
       period.shipping += dailyShipping;
@@ -184,33 +221,47 @@ function createSample(client: TowerClient, startDate: Date, dayCount: number, ki
   const avgPickPack = orders ? expenses.pickPack / orders : 0;
   const avgShipping = orders ? expenses.shipping / orders : 0;
   const shippingMultiplier = orders && blendedShipping ? avgShipping / blendedShipping : 1;
-  const countryRates = [rates.shippingUK, rates.shippingNL, rates.shippingDE, rates.shippingFR, rates.shippingOther];
+  const countryRates = [rates.shippingUK, rates.shippingNL, rates.shippingDE, rates.shippingFR, rates.shippingIE, rates.shippingES];
   const countries = allocate(countryShares).map((n, i) => ({
     country: countryLabels[i], code: countryCodes[i], orders: n,
     avgCost: avgPickPack + countryRates[i] * shippingMultiplier,
   }));
-  const domestic = countries[0];
-  const intCount = orders - domestic.orders;
-  const intCost = countries.slice(1).reduce((sum, c) => sum + c.avgCost * c.orders, 0);
-  const breakdown = (Object.keys(invoicePartLabels) as InvoicePart[]).map(key => ({
+  // Only directly allocatable order-level fees are included here.
+  // Storage, inbound, kitting and other charges remain in invoice reporting,
+  // but are deliberately not presented as per-order charges.
+  const breakdown = (["shipping", "pickPack"] as const).map(key => ({
     key, label: invoicePartLabels[key], amount: expenses[key],
     perOrder: orders ? expenses[key] / orders : 0,
     color: financeColors[key],
   })).sort((a, b) => b.perOrder - a.perOrder);
+  const costPerOrder = orders ? totalFFShipping / orders : 0;
+  // Two displayed line items must always add up to the exact displayed KPI.
+  const displayedCostPence = Math.round(costPerOrder * 100);
+  const pickPackPence = Math.round(avgPickPack * 100);
+  const perOrderDisplay = breakdown.map(item => ({
+    ...item,
+    displayValue: item.key === "pickPack" ? pickPackPence / 100 : (displayedCostPence - pickPackPence) / 100,
+  }));
+  const variation = 1 + 0.10 * Math.sin(Math.floor(startDate.getTime() / 86400000) / 11 + rates.multiplier);
+  const csQueries = csQueryTypes.map(issue => ({
+    ...issue,
+    total: Math.max(0, Math.round(orders * issue.share * variation)),
+  })).sort((a, b) => b.total - a.total);
+  const csTotal = csQueries.reduce((sum, issue) => sum + issue.total, 0);
+  const channelTotals = orderChannels.map(channel => ({
+    ...channel,
+    total: periods.reduce((sum, period) => sum + period[channel.key], 0),
+  }));
   const dotOnTime = Math.min(orders, Math.round(orders * (0.975 + 0.002 * Math.sin(dayCount / 7 + rates.multiplier))));
   const fillRate = 98.3 - (client === "test" ? 0.65 : client === "api" ? -0.22 : 0);
 
   return {
-    periods, orders, countries, expenses, totalCharges, totalFFShipping, breakdown,
-    allInPerOrder: orders ? totalCharges / orders : 0,
-    costPerOrder: orders ? totalFFShipping / orders : 0,
+    periods, orders, countries, expenses, totalCharges, totalFFShipping,
+    breakdown: perOrderDisplay, costPerOrder,
     costPerPick: rates.pickPack / 1.6, // Demo assumption: 1.6 picks per order
     pickPackPerOrder: avgPickPack,
     shippingPerOrder: avgShipping,
-    storagePerOrder: orders ? expenses.storage / orders : 0,
-    inboundPerOrder: orders ? expenses.inbound / orders : 0,
-    kittingPerOrder: orders ? expenses.kitting / orders : 0,
-    domesticCost: domestic.avgCost, internationalCost: intCount ? intCost / intCount : 0,
+    csQueries, csTotal, channelTotals,
     stockValue: rates.stockValue, onTime: dotOnTime,
     dot: orders ? dotOnTime / orders * 100 : 0,
     fillRate, backorders: Math.max(0, Math.round(orders * (100 - fillRate) / 100)),
@@ -310,6 +361,8 @@ export default function ControlTower({ client }: { client: TowerClient }) {
   const dayCount = isCustom && rangeValid ? diffDaysInclusive(start, end) : Number(preset);
   const data = useMemo(() => createSample(client, dateFromISO(start), dayCount, kittingEnabled), [client, start, dayCount, kittingEnabled]);
   const filenamePrefix = `Control_Tower_DEMO_${client}_${start}_to_${end}`;
+  const activeInvoiceParts = (Object.keys(invoicePartLabels) as InvoicePart[])
+    .filter(part => part !== "kitting" || kittingEnabled);
 
   const exportSnapshot = () => {
     const rows: (string | number)[][] = [
@@ -322,6 +375,8 @@ export default function ControlTower({ client }: { client: TowerClient }) {
       ["Stock held GBP (live snapshot illustration)", data.stockValue],
       ["Orders despatched", data.orders],
       ["Average cost per order (pick & pack + shipping), GBP", data.costPerOrder.toFixed(2)],
+      ["Average shipping per order, GBP", data.shippingPerOrder.toFixed(2)],
+      ["Average pick & pack per order, GBP", data.pickPackPerOrder.toFixed(2)],
       ["Warehouse DoT, %", data.dot.toFixed(2)],
       ["Fill rate, %", data.fillRate.toFixed(2)],
       ["Backorders", data.backorders],
@@ -332,17 +387,16 @@ export default function ControlTower({ client }: { client: TowerClient }) {
       ["Kitting cost, GBP", data.expenses.kitting.toFixed(2)],
       ["Other cost, GBP", data.expenses.other.toFixed(2)],
       ["Total illustrative invoice cost, GBP", data.totalCharges.toFixed(2)],
-      ["Average storage cost per order, GBP", data.storagePerOrder.toFixed(2)],
-      ["Average inbound cost per order, GBP", data.inboundPerOrder.toFixed(2)],
-      ["Average kitting cost per order, GBP", data.kittingPerOrder.toFixed(2)],
-      ["Estimated all-in cost per order, GBP", data.allInPerOrder.toFixed(2)],
       ["Cost per pick, GBP", data.costPerPick.toFixed(2)],
       [],
       ["Country", "Orders", "Average FF + shipping per order (GBP)"],
       ...data.countries.map(c => [c.country, c.orders, c.avgCost.toFixed(2)]),
       [],
-      ["Period", "Orders", "Storage GBP", "Pick & pack GBP", "Shipping GBP", "Inbound GBP", "Kitting GBP", "Other GBP", "Total GBP"],
-      ...data.periods.map(p => [p.label, p.orders, p.storage, p.pickPack, p.shipping, p.inbound, p.kitting, p.other, p.total]),
+      ["CS query type", "Cases raised (demo)"],
+      ...data.csQueries.map(q => [q.label, q.total]),
+      [],
+      ["Period", "Orders", "Amazon", "Shopify", "eBay", "TikTok", "Bulk upload", "Storage GBP", "Pick & pack GBP", "Shipping GBP", "Inbound GBP", "Kitting GBP", "Other GBP", "Total GBP"],
+      ...data.periods.map(p => [p.label, p.orders, p.amazon, p.shopify, p.ebay, p.tiktok, p.bulkUpload, p.storage, p.pickPack, p.shipping, p.inbound, p.kitting, p.other, p.total]),
     ];
     exportCsv(rows, `${filenamePrefix}.csv`);
   };
@@ -414,7 +468,7 @@ export default function ControlTower({ client }: { client: TowerClient }) {
         <TowerKpi label="Orders despatched" value={count(data.orders)} detail="Orders in selected period" icon={Package2}
           tooltip="Demonstration count of orders despatched during the selected reporting period." />
         <TowerKpi label="Cost per order" value={money(data.costPerOrder)} detail="Avg. pick & pack + shipping" icon={PoundSterling}
-          tooltip="Illustrative average using client-specific demo rates. Real amounts require actual Spike invoice items, contract rates and adjustments. Storage and inbound excluded." />
+          tooltip="Average directly attributable cost per order: pick & pack plus shipping only. Matches the Per order breakdown exactly. Invoice-only costs are not divided across orders." />
         <TowerKpi label="Warehouse DoT (overall)" value={`${data.dot.toFixed(2)}%`} detail={`${count(data.onTime)} of ${count(data.orders)} on time`} icon={Clock3}
           tooltip="Illustrative DoT. Live calculation should use Expected Despatch to determine due day and check actual despatch against the agreed operational deadline." />
         <TowerKpi label="Fill rate" value={`${data.fillRate.toFixed(2)}%`} detail="Orders fulfilled without shortfall" icon={Percent}
@@ -427,127 +481,150 @@ export default function ControlTower({ client }: { client: TowerClient }) {
           tooltip="Demonstration only. Live backorder count requires agreed WMS status rules and eligibility criteria." />
       </div>
 
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
-        <TowerPanel title="Invoice breakdown" detail="Illustrative charges by billing category over time" className="xl:col-span-7"
+      <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-12">
+        <TowerPanel title="Invoice breakdown" detail="Illustrative invoiced charges by category over time" className="xl:col-span-7"
           right={<div className="flex flex-wrap items-center justify-end gap-4">
             <label className="inline-flex cursor-pointer items-center gap-2 border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700" title="Demo setting: production will use client configuration">
               <input type="checkbox" checked={kittingEnabled} onChange={e => setKittingEnabled(e.target.checked)} className="h-4 w-4 accent-blue-600" /> Kitting enabled
             </label>
             <div className="text-right"><div className="text-[10px] uppercase tracking-wide text-slate-400">Total charges</div><div className="text-lg font-semibold text-slate-900">{GBP0.format(data.totalCharges)}</div></div>
           </div>}>
-          <div className="mb-4 flex flex-wrap gap-x-4 gap-y-2">
-            {(Object.keys(invoicePartLabels) as InvoicePart[]).map(part => (
-              <span key={part} className="inline-flex items-center gap-1.5 text-[11px] text-slate-600">
-                <span className="h-2.5 w-2.5" style={{ background: financeColors[part] }} />{invoicePartLabels[part]}
-              </span>
-            ))}
-          </div>
-          <div className="h-[280px] min-w-0">
+          <div className="h-[300px] min-w-0">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data.periods} margin={{ top: 8, right: 8, bottom: 15, left: 7 }}>
+              <BarChart data={data.periods} margin={{ top: 8, right: 10, bottom: 15, left: 5 }}>
                 <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#64748b" }} stroke="#cbd5e1" interval={0} angle={data.periods.length > 7 ? -30 : 0} textAnchor={data.periods.length > 7 ? "end" : "middle"} height={data.periods.length > 7 ? 56 : 34} />
-                <YAxis tickFormatter={v => `£${Math.round(Number(v)/1000)}k`} tick={{ fontSize: 11, fill: "#64748b" }} stroke="#cbd5e1" width={45} />
+                <YAxis tickFormatter={v => `£${Math.round(Number(v)/1000)}k`} tick={{ fontSize: 11, fill: "#64748b" }} stroke="#cbd5e1" width={48} />
                 <Tooltip formatter={(value: number, name: string) => [money(Number(value)), invoicePartLabels[name as InvoicePart] || name]}
                   contentStyle={{ background: "white", border: "1px solid #e2e8f0", fontSize: 12 }} />
-                {(Object.keys(invoicePartLabels) as InvoicePart[]).map((part, index) => (
-                  <Bar key={part} dataKey={part} stackId="invoice" fill={financeColors[part]} radius={index === (Object.keys(invoicePartLabels).length - 1) ? [3, 3, 0, 0] : undefined} maxBarSize={56} />
+                {activeInvoiceParts.map((part, index) => (
+                  <Bar key={part} name={part} dataKey={part} stackId="invoice" fill={financeColors[part]}
+                    radius={index === activeInvoiceParts.length - 1 ? [3, 3, 0, 0] : undefined} maxBarSize={56} />
                 ))}
               </BarChart>
             </ResponsiveContainer>
           </div>
-          <div className="mt-1 flex flex-wrap justify-between gap-2 border-t border-slate-100 pt-3 text-[11px] text-slate-500">
-            <span>Includes storage, pick & pack, shipping, inbound, {kittingEnabled ? "kitting, " : ""}and other charges</span>
-            <span>Spike connection pending</span>
+          <div className="mt-2 grid grid-cols-2 gap-2 border-t border-slate-100 pt-4 sm:grid-cols-3" aria-label="Invoice chart colour key">
+            {activeInvoiceParts.map(part => (
+              <div key={part} className="flex min-w-0 items-center gap-2 rounded-sm border border-slate-100 bg-slate-50 px-2.5 py-2">
+                <span className="h-3 w-3 shrink-0 rounded-[2px]" style={{ backgroundColor: financeColors[part] }} />
+                <div className="min-w-0"><div className="truncate text-[11px] font-medium text-slate-700">{invoicePartLabels[part]}</div>
+                  <div className="text-[11px] tabular-nums text-slate-500">{GBP0.format(data.expenses[part])}</div></div>
+              </div>
+            ))}
           </div>
+          <div className="mt-3 text-[11px] text-slate-500">Invoice categories are separate from the per-order fulfilment + shipping rate.</div>
         </TowerPanel>
 
-        <TowerPanel title="Per order breakdown" detail="All-in cost components, highest first" className="xl:col-span-5"
-          right={<div className="text-right"><div className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Estimated total / order</div><div className="text-2xl font-semibold tracking-tight text-slate-900">{money(data.allInPerOrder)}</div></div>}>
-          <div className="mb-4 border border-blue-100 bg-blue-50/60 px-3.5 py-3">
-            <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-medium text-slate-600">
-              <span>Cost composition</span>
-              <span>{count(data.orders)} orders · {dayCount} days</span>
+        <div className="flex min-w-0 flex-col gap-5 xl:col-span-5">
+          <TowerPanel title="Per order breakdown" detail="Directly attributable costs · highest first"
+            right={<div className="text-right"><div className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Total / order</div><div className="text-2xl font-semibold tracking-tight text-slate-900">{money(data.costPerOrder)}</div></div>}>
+            <div className="mb-4 rounded-sm border border-blue-100 bg-blue-50/60 px-3.5 py-3">
+              <div className="flex items-center justify-between gap-2 text-[11px] text-slate-600">
+                <span className="font-medium">FF + shipping allocation</span>
+                <span>{count(data.orders)} orders</span>
+              </div>
+              <div className="mt-2.5 flex h-4 w-full overflow-hidden rounded-sm bg-slate-100" role="img" aria-label="Pick and pack and shipping proportions of average cost per order">
+                {data.breakdown.map(item => (
+                  <div key={item.key} style={{ width: `${data.totalFFShipping ? item.amount / data.totalFFShipping * 100 : 0}%`, backgroundColor: item.color }} title={`${item.label}: ${money(item.displayValue)}`} />
+                ))}
+              </div>
             </div>
-            <div className="mt-2.5 flex h-3.5 w-full overflow-hidden rounded-sm bg-slate-200" role="img" aria-label="Proportion of cost per order by billing category">
-              {data.breakdown.filter(item => item.amount > 0).map(item => (
-                <div key={item.key} style={{width: `${data.totalCharges ? item.amount / data.totalCharges * 100 : 0}%`, background: item.color}} title={`${item.label}: ${money(item.perOrder)} per order`} />
-              ))}
-            </div>
-            <div className="mt-2 text-[11px] text-slate-500">Weighted average of the selected period's charges</div>
-          </div>
-          <div className="space-y-3.5">
-            {data.breakdown.map((item, rank) => {
-              const share = data.totalCharges ? item.amount / data.totalCharges * 100 : 0;
-              return (
-                <div key={item.key} className={`grid grid-cols-[22px_minmax(0,1fr)_auto] items-center gap-3 ${item.key === "kitting" && !kittingEnabled ? "opacity-50" : ""}`}>
-                  <span className="text-center text-[11px] font-semibold tabular-nums text-slate-400">{String(rank + 1).padStart(2, "0")}</span>
-                  <div className="min-w-0">
-                    <div className="mb-1.5 flex flex-wrap items-baseline justify-between gap-2">
-                      <span className="text-xs font-semibold text-slate-800">{item.label}</span>
-                      <span className="text-[11px] tabular-nums text-slate-400">{item.key === "kitting" && !kittingEnabled ? "Disabled" : `${share.toFixed(1)}% of total`}</span>
-                    </div>
-                    <div className="h-[7px] overflow-hidden rounded-full bg-slate-100">
-                      <div className="h-full rounded-full transition-all duration-200" style={{width: `${share}%`, background: item.color}} />
+            <div className="space-y-4">
+              {data.breakdown.map((item, rank) => {
+                const share = data.totalFFShipping ? item.amount / data.totalFFShipping * 100 : 0;
+                return (
+                  <div key={item.key} className="flex items-start gap-3">
+                    <span className="pt-0.5 text-xs font-semibold tabular-nums text-slate-400">{String(rank + 1).padStart(2, "0")}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="mb-1.5 flex items-center justify-between gap-2">
+                        <span className="text-xs font-semibold text-slate-800">{item.label}</span>
+                        <span className="text-sm font-semibold tabular-nums text-slate-900">{money(item.displayValue)}</span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full" style={{ width: `${share}%`, backgroundColor: item.color }} /></div>
+                      <div className="mt-1 text-right text-[11px] tabular-nums text-slate-400">{share.toFixed(1)}%</div>
                     </div>
                   </div>
-                  <div className="min-w-[62px] text-right text-sm font-semibold tabular-nums text-slate-900">{money(item.perOrder)}</div>
-                </div>
-              );
-            })}
-          </div>
-          <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-xs">
-            <div><span className="text-slate-500">Cost per pick</span><span className="ml-2 font-semibold tabular-nums text-slate-800">{money(data.costPerPick)}</span></div>
-            <div className="text-[11px] text-slate-500">Demo assumption: 1.6 picks / order</div>
-          </div>
-        </TowerPanel>
+                );
+              })}
+            </div>
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-xs">
+              <span className="text-slate-500">Cost per pick <strong className="ml-1 text-slate-900">{money(data.costPerPick)}</strong></span>
+              <span className="text-[11px] text-slate-400">Demo: 1.6 picks / order</span>
+            </div>
+          </TowerPanel>
+
+          <TowerPanel title="CS Queries" detail="Illustrative client service issues raised in the selected period"
+            right={<div className="text-right"><div className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Total cases</div><div className="text-2xl font-semibold tracking-tight text-slate-900">{count(data.csTotal)}</div></div>}>
+            <div className="space-y-3.5">
+              {data.csQueries.map((issue, rank) => {
+                const share = data.csTotal ? issue.total / data.csTotal * 100 : 0;
+                return (
+                  <div key={issue.label} className="flex items-center gap-3">
+                    <span className="w-4 shrink-0 text-[11px] font-semibold tabular-nums text-slate-400">{rank + 1}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="mb-1 flex items-center justify-between gap-2 text-xs">
+                        <span className="font-medium text-slate-700">{issue.label}</span>
+                        <span className="shrink-0 font-semibold tabular-nums text-slate-900">{count(issue.total)}</span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                        <div className="h-full rounded-full" style={{ width: `${share}%`, backgroundColor: issue.color }} />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-4 border-t border-slate-100 pt-3 text-[11px] text-slate-500">Counts change with the date range. Categories will be mapped to CS ticket data in a future integration.</div>
+          </TowerPanel>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
-        <TowerPanel title="Cost per order (FF + shipping)" detail="Average fulfilment + shipping costs by destination" className="xl:col-span-7"
-          right={<DemoTag />}>
-          <div className="mb-4 grid grid-cols-2 gap-3">
-            <div className="border border-slate-200 bg-slate-50 px-3 py-3">
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Domestic · UK</div>
-              <div className="mt-1 text-xl font-semibold text-slate-900">{money(data.domesticCost)}</div>
-              <div className="mt-0.5 text-[11px] text-slate-500">Per despatched order</div>
-            </div>
-            <div className="border border-slate-200 bg-slate-50 px-3 py-3">
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">International · avg</div>
-              <div className="mt-1 text-xl font-semibold text-slate-900">{money(data.internationalCost)}</div>
-              <div className="mt-0.5 text-[11px] text-slate-500">Per despatched order</div>
-            </div>
-          </div>
-          <div className="h-[215px] min-w-0">
+        <TowerPanel title="Cost per order (FF + shipping)" detail="Average fulfilment + shipping cost for each destination country" className="xl:col-span-7"
+          right={<div className="text-right"><div className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Blended average / order</div><div className="text-lg font-semibold text-slate-900">{money(data.costPerOrder)}</div></div>}>
+          <div className="h-[335px] min-w-0">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data.countries} layout="vertical" margin={{ left: 20, right: 24, top: 2, bottom: 4 }}>
+              <BarChart data={data.countries} layout="vertical" margin={{ left: 16, right: 30, top: 5, bottom: 5 }}>
                 <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" horizontal={false} />
-                <XAxis type="number" tickFormatter={v => `£${v}`} tick={{ fontSize: 11, fill: "#64748b" }} stroke="#cbd5e1" />
-                <YAxis dataKey="country" type="category" width={105} tick={{ fontSize: 11, fill: "#64748b" }} stroke="#cbd5e1" />
-                <Tooltip formatter={(value: number) => [money(Number(value)), "Avg. cost / order"]} contentStyle={{ fontSize: 12, border: "1px solid #e2e8f0" }} />
-                <Bar dataKey="avgCost" fill="#4f46e5" radius={[0, 4, 4, 0]} maxBarSize={18} />
+                <XAxis type="number" domain={[0, "dataMax"]} tickFormatter={v => `£${v}`} tick={{ fontSize: 11, fill: "#64748b" }} stroke="#cbd5e1" />
+                <YAxis dataKey="country" type="category" width={112} tick={{ fontSize: 11, fill: "#64748b" }} stroke="#cbd5e1" />
+                <Tooltip formatter={(value: number) => [money(Number(value)), "Avg. FF + shipping per order"]} contentStyle={{ fontSize: 12, border: "1px solid #e2e8f0" }} />
+                <Bar dataKey="avgCost" fill="#4f46e5" radius={[0, 4, 4, 0]} maxBarSize={20} />
               </BarChart>
             </ResponsiveContainer>
           </div>
-          <div className="mt-3 border-t border-slate-100 pt-3 text-[11px] text-slate-500">
-            This chart compares fulfilment + shipping by destination. The per-order breakdown above includes storage, inbound, kitting and other charges.
+          <div className="mt-1 border-t border-slate-100 pt-3 text-[11px] text-slate-500">
+            All destinations are shown separately; there is no grouped “Other” country.
           </div>
         </TowerPanel>
 
-        <TowerPanel title="Orders despatched" detail="Volume trend across the selected period" className="xl:col-span-5"
-          right={<span className="text-xs font-semibold text-slate-500">{count(data.orders)} total</span>}>
-          <div className="h-[345px] min-w-0 pt-5">
+        <TowerPanel title="Orders despatched" detail="Order volume by sales channel over the selected period" className="xl:col-span-5"
+          right={<span className="text-sm font-semibold tabular-nums text-slate-800">{count(data.orders)} total</span>}>
+          <div className="h-[285px] min-w-0 pt-3">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data.periods} margin={{ left: 0, right: 10, top: 10, bottom: 20 }}>
+              <BarChart data={data.periods} margin={{ left: 0, right: 10, top: 10, bottom: 15 }}>
                 <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#64748b" }} stroke="#cbd5e1" interval={0} angle={data.periods.length > 7 ? -30 : 0} textAnchor={data.periods.length > 7 ? "end" : "middle"} height={data.periods.length > 7 ? 55 : 35} />
                 <YAxis tick={{ fontSize: 11, fill: "#64748b" }} stroke="#cbd5e1" width={45} />
-                <Tooltip formatter={(value: number) => [count(Number(value)), "Orders"]} contentStyle={{ fontSize: 12, border: "1px solid #e2e8f0" }} />
-                <Bar dataKey="orders" fill="#0ea5e9" radius={[4, 4, 0, 0]} maxBarSize={55} />
+                <Tooltip formatter={(value: number, name: string) => [count(Number(value)), orderChannels.find(c => c.key === name)?.label || name]}
+                  contentStyle={{ fontSize: 12, border: "1px solid #e2e8f0" }} />
+                {orderChannels.map((channel, index) => (
+                  <Bar key={channel.key} dataKey={channel.key} name={channel.key} stackId="channels" fill={channel.color}
+                    radius={index === orderChannels.length - 1 ? [3, 3, 0, 0] : undefined} maxBarSize={55} />
+                ))}
               </BarChart>
             </ResponsiveContainer>
           </div>
-          <div className="border-t border-slate-100 pt-3 text-[11px] text-slate-500">Grouping changes automatically for short and long date ranges.</div>
+          <div className="mt-3 grid grid-cols-2 gap-2 border-t border-slate-100 pt-3 sm:grid-cols-3">
+            {data.channelTotals.map(channel => (
+              <div key={channel.key} className="flex items-center gap-2 text-[11px] text-slate-600">
+                <span className="h-2.5 w-2.5 shrink-0 rounded-[2px]" style={{ backgroundColor: channel.color }} />
+                <span className="min-w-0 truncate">{channel.label}</span>
+                <span className="ml-auto font-semibold tabular-nums text-slate-700">{count(channel.total)}</span>
+              </div>
+            ))}
+          </div>
         </TowerPanel>
       </div>
 
