@@ -16,6 +16,9 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
+  Pie,
+  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -24,7 +27,8 @@ import {
 
 type TowerClient = "startup" | "test" | "api";
 type TowerPreset = "7" | "14" | "30" | "60";
-type InvoicePart = "storage" | "pickPack" | "shipping" | "inbound" | "kitting" | "other";
+type InvoicePart = "inbound" | "pickPack" | "storage" | "b2b" | "vas" | "shipping";
+
 
 /**
  * Phase 3 demonstration data only.
@@ -46,46 +50,69 @@ const demoClient: Record<TowerClient, {
   storageDaily: number;
   inboundPerOrder: number;
   kittingPerKittedOrder: number;
-  otherPerOrder: number;
+  b2bPerOrder: number;
+  vasPerOrder: number;
 }> = {
   startup: {
     label: "Startup Ltd", multiplier: 1, stockValue: 1500000,
     pickPack: 1.68, packaging: 0.23, shippingUK: 2.91, shippingNL: 5.52,
     shippingDE: 5.94, shippingFR: 6.12, shippingIE: 5.75, shippingES: 6.58,
-    storageDaily: 88, inboundPerOrder: 0.31, kittingPerKittedOrder: 1.18, otherPerOrder: 0.14,
+    storageDaily: 88, inboundPerOrder: 0.31, kittingPerKittedOrder: 1.18, b2bPerOrder: 0.16, vasPerOrder: 0.08,
   },
   test: {
     label: "Test Account Ltd", multiplier: 0.78, stockValue: 1080000,
     pickPack: 1.82, packaging: 0.19, shippingUK: 3.10, shippingNL: 5.81,
     shippingDE: 6.13, shippingFR: 6.35, shippingIE: 6.01, shippingES: 6.91,
-    storageDaily: 64, inboundPerOrder: 0.27, kittingPerKittedOrder: 1.36, otherPerOrder: 0.18,
+    storageDaily: 64, inboundPerOrder: 0.27, kittingPerKittedOrder: 1.36, b2bPerOrder: 0.18, vasPerOrder: 0.07,
   },
   api: {
     label: "API Test Ltd", multiplier: 1.26, stockValue: 1850000,
     pickPack: 1.53, packaging: 0.22, shippingUK: 2.76, shippingNL: 5.40,
     shippingDE: 5.75, shippingFR: 5.89, shippingIE: 5.61, shippingES: 6.39,
-    storageDaily: 108, inboundPerOrder: 0.28, kittingPerKittedOrder: 1.09, otherPerOrder: 0.16,
+    storageDaily: 108, inboundPerOrder: 0.28, kittingPerKittedOrder: 1.09, b2bPerOrder: 0.15, vasPerOrder: 0.09,
   },
 };
 
 const financeColors: Record<InvoicePart, string> = {
-  storage: "#9ca3af",
+  inbound: "#20b7a5",
   pickPack: "#4f46e5",
+  storage: "#94a3b8",
+  b2b: "#f59e0b",
+  vas: "#a855f7",
   shipping: "#0ea5e9",
-  inbound: "#2bb9a3",
-  kitting: "#a855f7",
-  other: "#f59e0b",
 };
 const countryShares = [0.64, 0.12, 0.08, 0.06, 0.055, 0.045];
 const countryLabels = ["United Kingdom", "Netherlands", "Germany", "France", "Ireland", "Spain"];
 const countryCodes = ["UK", "NL", "DE", "FR", "IE", "ES"];
-const orderChannels = [
-  { key: "amazon", label: "Amazon", color: "#4f46e5" },
-  { key: "shopify", label: "Shopify", color: "#22a06b" },
-  { key: "ebay", label: "eBay", color: "#0ea5e9" },
-  { key: "tiktok", label: "TikTok", color: "#f59e0b" },
-  { key: "bulkUpload", label: "Bulk upload", color: "#94a3b8" },
+const countryColors = ["#4f46e5", "#0ea5e9", "#2bb9a3", "#f59e0b", "#a855f7", "#64748b"];
+
+// Separate storefronts within each channel. Each segment counts real orders
+// in the illustration, not a separate channel total added on top.
+const orderStores = [
+  { key: "amazonStore1", channel: "Amazon", store: "Store 1", color: "#4f46e5", weight: 0.35 },
+  { key: "shopifyStore1", channel: "Shopify", store: "Store 1", color: "#15803d", weight: 0.17 },
+  { key: "shopifyStore2", channel: "Shopify", store: "Store 2", color: "#4ade80", weight: 0.12 },
+  { key: "ebayStore1", channel: "eBay", store: "Store 1", color: "#0284c7", weight: 0.075 },
+  { key: "ebayStore2", channel: "eBay", store: "Store 2", color: "#38bdf8", weight: 0.055 },
+  { key: "ebayStore3", channel: "eBay", store: "Store 3", color: "#a5d8ff", weight: 0.04 },
+  { key: "tiktokStore1", channel: "TikTok", store: "Store 1", color: "#f59e0b", weight: 0.11 },
+  { key: "bulkUpload", channel: "Bulk upload", store: "Upload", color: "#94a3b8", weight: 0.08 },
 ] as const;
+const orderServices = [
+  { key: "evriInternational", label: "Evri International", color: "#7c3aed", weight: 0.19 },
+  { key: "evriDomesticStandard", label: "Evri Domestic Standard", color: "#0ea5e9", weight: 0.45 },
+  { key: "evriDomestic24hr", label: "Evri Domestic 24hr", color: "#2bb9a3", weight: 0.36 },
+] as const;
+
+type StoreKey = typeof orderStores[number]["key"];
+type ServiceKey = typeof orderServices[number]["key"];
+type SamplePeriod = {
+  label: string;
+  orders: number;
+  days: number;
+  total: number;
+} & Record<InvoicePart | StoreKey | ServiceKey, number>;
+
 const csQueryTypes = [
   { label: "Delivery enquiries", share: 0.019, color: "#2563eb" },
   { label: "Undelivered parcels", share: 0.012, color: "#f59e0b" },
@@ -94,8 +121,14 @@ const csQueryTypes = [
   { label: "Damaged deliveries", share: 0.004, color: "#e87950" },
 ] as const;
 const invoicePartLabels: Record<InvoicePart, string> = {
-  storage: "Storage", pickPack: "Pick & pack", shipping: "Shipping", inbound: "Inbound", kitting: "Kitting", other: "Other",
+  inbound: "Inbound",
+  pickPack: "Pick & Pack",
+  storage: "Storage",
+  b2b: "B2B",
+  vas: "VAS",
+  shipping: "Shipping",
 };
+const invoiceParts: InvoicePart[] = ["inbound", "pickPack", "storage", "b2b", "vas", "shipping"];
 
 const GBP = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 2 });
 const GBP0 = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 0 });
@@ -119,43 +152,30 @@ const diffDaysInclusive = (from: string, to: string) => {
 
 function createSample(client: TowerClient, startDate: Date, dayCount: number, kittingEnabled: boolean) {
   const rates = demoClient[client];
-  const periodCount = dayCount <= 14 ? Math.min(dayCount, 7) : Math.min(12, Math.ceil(dayCount / 7));
-  const basePerPeriod = Math.floor(dayCount / periodCount);
-  const extraDays = dayCount % periodCount;
-  const periods: {
-    label: string;
-    orders: number;
-    days: number;
-    amazon: number;
-    shopify: number;
-    ebay: number;
-    tiktok: number;
-    bulkUpload: number;
-    storage: number;
-    pickPack: number;
-    shipping: number;
-    inbound: number;
-    kitting: number;
-    other: number;
-    total: number;
-  }[] = [];
+  // Use real seven-day bins for despatch charts; final partial week is allowed.
+  const periodCount = Math.max(1, Math.ceil(dayCount / 7));
+  const periods: SamplePeriod[] = [];
   const blendedShipping = (
     rates.shippingUK * countryShares[0] + rates.shippingNL * countryShares[1]
     + rates.shippingDE * countryShares[2] + rates.shippingFR * countryShares[3]
     + rates.shippingIE * countryShares[4] + rates.shippingES * countryShares[5]
   );
-  let daysUsed = 0;
 
-  // Daily deterministic sample activity. All displayed per-order costs are
-  // calculated from period charges / period orders; never fixed UI literals.
-  // This makes 7 / 14 / 30 / 60-day filters reflect differing activity mixes.
   for (let index = 0; index < periodCount; index++) {
-    const days = basePerPeriod + (index < extraDays ? 1 : 0);
+    const daysUsed = index * 7;
+    const days = Math.min(7, dayCount - daysUsed);
     const from = offsetDate(startDate, daysUsed);
     const until = offsetDate(from, days - 1);
-    const period = {label: days === 1 ? friendlyDate(from) : `${friendlyDate(from)}–${friendlyDate(until)}`,
-      orders: 0, days, amazon: 0, shopify: 0, ebay: 0, tiktok: 0, bulkUpload: 0,
-      storage: 0, pickPack: 0, shipping: 0, inbound: 0, kitting: 0, other: 0, total: 0};
+    const period = {
+      label: days === 1 ? friendlyDate(from) : `${friendlyDate(from)}–${friendlyDate(until)}`,
+      days, orders: 0, total: 0,
+      inbound: 0, pickPack: 0, storage: 0, b2b: 0, vas: 0, shipping: 0,
+      amazonStore1: 0, shopifyStore1: 0, shopifyStore2: 0,
+      ebayStore1: 0, ebayStore2: 0, ebayStore3: 0,
+      tiktokStore1: 0, bulkUpload: 0,
+      evriInternational: 0, evriDomesticStandard: 0, evriDomestic24hr: 0,
+    } as SamplePeriod;
+
     for (let d = 0; d < days; d++) {
       const date = offsetDate(from, d);
       const ordinal = Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86400000);
@@ -167,40 +187,45 @@ function createSample(client: TowerClient, startDate: Date, dayCount: number, ki
       const dailyPickPack = orders * (rates.pickPack + rates.packaging) * (1 + 0.028 * Math.sin(ordinal / 8.2));
       const dailyShipping = orders * blendedShipping * (1 + 0.025 * Math.cos(ordinal / 9.7 + rates.multiplier));
       const dailyInbound = orders * rates.inboundPerOrder * (1 + 0.32 * Math.sin(ordinal / 7.9 + 0.3 * rates.multiplier));
+      const dailyB2B = orders * rates.b2bPerOrder * (1 + 0.10 * Math.sin(ordinal / 10.4));
       const kittingShare = Math.max(0.02, 0.18 + 0.075 * Math.sin(ordinal / 6.8 + rates.multiplier));
-      const dailyKitting = kittingEnabled ? Math.round(orders * kittingShare) * rates.kittingPerKittedOrder : 0;
-      const dailyOther = orders * rates.otherPerOrder * (1 + 0.08 * Math.cos(ordinal / 9.1));
+      // Kitting is one component of VAS; when disabled, other VAS activity remains.
+      const dailyVAS = orders * rates.vasPerOrder + (kittingEnabled ? Math.round(orders * kittingShare) * rates.kittingPerKittedOrder : 0);
       period.orders += orders;
-      // Allocate each day's despatches across channels. Every chart segment
-      // comes from the same order population, so stacks equal the daily total.
-      const channelWeights = [
-        0.36 + 0.035 * Math.sin(ordinal / 13.3),
-        0.29 + 0.030 * Math.cos(ordinal / 8.1),
-        0.17 + 0.020 * Math.sin(ordinal / 7.2),
-        0.11 + 0.014 * Math.cos(ordinal / 5.3),
-      ];
-      let channelAllocated = 0;
-      orderChannels.forEach((channel, index) => {
-        const channelOrders = index === orderChannels.length - 1
-          ? orders - channelAllocated
-          : Math.round(orders * channelWeights[index]);
-        period[channel.key] += channelOrders;
-        channelAllocated += channelOrders;
+
+      // Allocate each order exactly once among the example storefronts.
+      const weights = orderStores.map((store, i) => store.weight * (1 + 0.11 * Math.sin(ordinal / (5 + i * 2) + i)));
+      const weightTotal = weights.reduce((a, b) => a + b, 0);
+      let used = 0;
+      orderStores.forEach((store, i) => {
+        const n = i === orderStores.length - 1 ? orders - used : Math.round(orders * weights[i] / weightTotal);
+        period[store.key] += n;
+        used += n;
       });
-      period.storage += dailyStorage;
-      period.pickPack += dailyPickPack;
-      period.shipping += dailyShipping;
+
+      // An independent complete allocation of the same orders by carrier service.
+      const svcWeights = orderServices.map((service, i) => service.weight * (1 + 0.08 * Math.cos(ordinal / (7 + i * 3) + i)));
+      const svcWeightTotal = svcWeights.reduce((a, b) => a + b, 0);
+      used = 0;
+      orderServices.forEach((service, i) => {
+        const n = i === orderServices.length - 1 ? orders - used : Math.round(orders * svcWeights[i] / svcWeightTotal);
+        period[service.key] += n;
+        used += n;
+      });
+
       period.inbound += dailyInbound;
-      period.kitting += dailyKitting;
-      period.other += dailyOther;
+      period.pickPack += dailyPickPack;
+      period.storage += dailyStorage;
+      period.b2b += dailyB2B;
+      period.vas += dailyVAS;
+      period.shipping += dailyShipping;
     }
-    for (const key of ["storage", "pickPack", "shipping", "inbound", "kitting", "other"] as InvoicePart[]) {
+    for (const key of invoiceParts) {
       period[key] = +period[key].toFixed(2);
       period.total += period[key];
     }
     period.total = +period.total.toFixed(2);
     periods.push(period);
-    daysUsed += days;
   }
 
   const orders = periods.reduce((sum, p) => sum + p.orders, 0);
@@ -212,30 +237,35 @@ function createSample(client: TowerClient, startDate: Date, dayCount: number, ki
       return n;
     });
   };
-  const expenses = (Object.keys(invoicePartLabels) as InvoicePart[]).reduce((acc, key) => {
+  const expenses = invoiceParts.reduce((acc, key) => {
     acc[key] = periods.reduce((sum, p) => sum + p[key], 0);
     return acc;
   }, {} as Record<InvoicePart, number>);
-  const totalCharges = Object.values(expenses).reduce((a, b) => a + b, 0);
+  const totalCharges = invoiceParts.reduce((sum, key) => sum + expenses[key], 0);
   const totalFFShipping = expenses.pickPack + expenses.shipping;
   const avgPickPack = orders ? expenses.pickPack / orders : 0;
   const avgShipping = orders ? expenses.shipping / orders : 0;
-  const shippingMultiplier = orders && blendedShipping ? avgShipping / blendedShipping : 1;
   const countryRates = [rates.shippingUK, rates.shippingNL, rates.shippingDE, rates.shippingFR, rates.shippingIE, rates.shippingES];
-  const countries = allocate(countryShares).map((n, i) => ({
-    country: countryLabels[i], code: countryCodes[i], orders: n,
-    avgCost: avgPickPack + countryRates[i] * shippingMultiplier,
-  }));
-  // Only directly allocatable order-level fees are included here.
-  // Storage, inbound, kitting and other charges remain in invoice reporting,
-  // but are deliberately not presented as per-order charges.
+  const countryVolumes = allocate(countryShares);
+  const weightedRateTotal = countryVolumes.reduce((sum, n, i) => sum + n * countryRates[i], 0);
+  // Country slices represent total spend (additive), not raw averages (non-additive).
+  // For each slice, show that country's actual allocated average per order.
+  const countries = countryVolumes.map((n, i) => {
+    const pickPackTotal = orders ? expenses.pickPack * n / orders : 0;
+    const shippingTotal = weightedRateTotal ? expenses.shipping * n * countryRates[i] / weightedRateTotal : 0;
+    const totalCost = pickPackTotal + shippingTotal;
+    return {
+      country: countryLabels[i], code: countryCodes[i], color: countryColors[i],
+      orders: n, totalCost,
+      avgCost: n ? totalCost / n : 0,
+    };
+  });
   const breakdown = (["shipping", "pickPack"] as const).map(key => ({
     key, label: invoicePartLabels[key], amount: expenses[key],
     perOrder: orders ? expenses[key] / orders : 0,
     color: financeColors[key],
   })).sort((a, b) => b.perOrder - a.perOrder);
   const costPerOrder = orders ? totalFFShipping / orders : 0;
-  // Two displayed line items must always add up to the exact displayed KPI.
   const displayedCostPence = Math.round(costPerOrder * 100);
   const pickPackPence = Math.round(avgPickPack * 100);
   const perOrderDisplay = breakdown.map(item => ({
@@ -248,9 +278,13 @@ function createSample(client: TowerClient, startDate: Date, dayCount: number, ki
     total: Math.max(0, Math.round(orders * issue.share * variation)),
   })).sort((a, b) => b.total - a.total);
   const csTotal = csQueries.reduce((sum, issue) => sum + issue.total, 0);
-  const channelTotals = orderChannels.map(channel => ({
-    ...channel,
-    total: periods.reduce((sum, period) => sum + period[channel.key], 0),
+  const channelTotals = orderStores.map(store => ({
+    ...store,
+    total: periods.reduce((sum, period) => sum + period[store.key], 0),
+  }));
+  const serviceTotals = orderServices.map(service => ({
+    ...service,
+    total: periods.reduce((sum, period) => sum + period[service.key], 0),
   }));
   const dotOnTime = Math.min(orders, Math.round(orders * (0.975 + 0.002 * Math.sin(dayCount / 7 + rates.multiplier))));
   const fillRate = 98.3 - (client === "test" ? 0.65 : client === "api" ? -0.22 : 0);
@@ -261,7 +295,7 @@ function createSample(client: TowerClient, startDate: Date, dayCount: number, ki
     costPerPick: rates.pickPack / 1.6, // Demo assumption: 1.6 picks per order
     pickPackPerOrder: avgPickPack,
     shippingPerOrder: avgShipping,
-    csQueries, csTotal, channelTotals,
+    csQueries, csTotal, channelTotals, serviceTotals,
     stockValue: rates.stockValue, onTime: dotOnTime,
     dot: orders ? dotOnTime / orders * 100 : 0,
     fillRate, backorders: Math.max(0, Math.round(orders * (100 - fillRate) / 100)),
@@ -361,8 +395,7 @@ export default function ControlTower({ client }: { client: TowerClient }) {
   const dayCount = isCustom && rangeValid ? diffDaysInclusive(start, end) : Number(preset);
   const data = useMemo(() => createSample(client, dateFromISO(start), dayCount, kittingEnabled), [client, start, dayCount, kittingEnabled]);
   const filenamePrefix = `Control_Tower_DEMO_${client}_${start}_to_${end}`;
-  const activeInvoiceParts = (Object.keys(invoicePartLabels) as InvoicePart[])
-    .filter(part => part !== "kitting" || kittingEnabled);
+  const activeInvoiceParts = invoiceParts;
 
   const exportSnapshot = () => {
     const rows: (string | number)[][] = [
@@ -384,19 +417,19 @@ export default function ControlTower({ client }: { client: TowerClient }) {
       ["Pick & pack cost, GBP", data.expenses.pickPack.toFixed(2)],
       ["Shipping cost, GBP", data.expenses.shipping.toFixed(2)],
       ["Inbound cost, GBP", data.expenses.inbound.toFixed(2)],
-      ["Kitting cost, GBP", data.expenses.kitting.toFixed(2)],
-      ["Other cost, GBP", data.expenses.other.toFixed(2)],
+      ["B2B cost, GBP", data.expenses.b2b.toFixed(2)],
+      ["VAS cost, GBP", data.expenses.vas.toFixed(2)],
       ["Total illustrative invoice cost, GBP", data.totalCharges.toFixed(2)],
       ["Cost per pick, GBP", data.costPerPick.toFixed(2)],
       [],
-      ["Country", "Orders", "Average FF + shipping per order (GBP)"],
-      ...data.countries.map(c => [c.country, c.orders, c.avgCost.toFixed(2)]),
+      ["Country", "Orders", "Average FF + shipping per order (GBP)", "Allocated FF + shipping spend (GBP)"],
+      ...data.countries.map(c => [c.country, c.orders, c.avgCost.toFixed(2), c.totalCost.toFixed(2)]),
       [],
       ["CS query type", "Cases raised (demo)"],
       ...data.csQueries.map(q => [q.label, q.total]),
       [],
-      ["Period", "Orders", "Amazon", "Shopify", "eBay", "TikTok", "Bulk upload", "Storage GBP", "Pick & pack GBP", "Shipping GBP", "Inbound GBP", "Kitting GBP", "Other GBP", "Total GBP"],
-      ...data.periods.map(p => [p.label, p.orders, p.amazon, p.shopify, p.ebay, p.tiktok, p.bulkUpload, p.storage, p.pickPack, p.shipping, p.inbound, p.kitting, p.other, p.total]),
+      ["Period", "Orders", ...orderStores.map(st => `${st.channel} ${st.store}`), ...orderServices.map(s => s.label), ...invoiceParts.map(part => `${invoicePartLabels[part]} GBP`), "Total invoice GBP"],
+      ...data.periods.map(p => [p.label, p.orders, ...orderStores.map(st => p[st.key]), ...orderServices.map(s => p[s.key]), ...invoiceParts.map(part => p[part]), p.total]),
     ];
     exportCsv(rows, `${filenamePrefix}.csv`);
   };
@@ -514,36 +547,36 @@ export default function ControlTower({ client }: { client: TowerClient }) {
               </div>
             ))}
           </div>
-          <div className="mt-3 text-[11px] text-slate-500">Invoice categories are separate from the per-order fulfilment + shipping rate.</div>
+          <div className="mt-3 text-[11px] text-slate-500">Invoice totals include Inbound, Pick & Pack, Storage, B2B, VAS and Shipping. The per-order KPI includes Pick & Pack and Shipping only.</div>
         </TowerPanel>
 
-        <TowerPanel title="Per order breakdown" detail="Directly attributable costs · highest first" className="h-full xl:col-span-4"
+        <TowerPanel title="Per order breakdown" detail="Pick & Pack + Shipping · cost share" className="h-full xl:col-span-4"
           right={<div className="text-right"><div className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Total / order</div><div className="text-2xl font-semibold tracking-tight text-slate-900">{money(data.costPerOrder)}</div></div>}>
-          <div className="mb-4 rounded-sm border border-blue-100 bg-blue-50/60 px-3.5 py-3">
-            <div className="flex items-center justify-between gap-2 text-[11px] text-slate-600">
-              <span className="font-medium">FF + shipping allocation</span>
-              <span>{count(data.orders)} orders</span>
-            </div>
-            <div className="mt-2.5 flex h-4 w-full overflow-hidden rounded-sm bg-slate-100" role="img" aria-label="Pick and pack and shipping proportions of average cost per order">
-              {data.breakdown.map(item => (
-                <div key={item.key} style={{ width: `${data.totalFFShipping ? item.amount / data.totalFFShipping * 100 : 0}%`, backgroundColor: item.color }} title={`${item.label}: ${money(item.displayValue)}`} />
-              ))}
+          <div className="relative h-[230px] min-w-0" aria-label="Share of direct per-order costs shown as a pie chart">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={data.breakdown} dataKey="perOrder" nameKey="label" cx="50%" cy="50%"
+                  innerRadius={57} outerRadius={91} paddingAngle={2} stroke="#ffffff" strokeWidth={2}>
+                  {data.breakdown.map(item => <Cell key={item.key} fill={item.color} />)}
+                </Pie>
+                <Tooltip formatter={(value: number) => [money(Number(value)), "Average per order"]}
+                  contentStyle={{ fontSize: 12, border: "1px solid #e2e8f0" }} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Per order</span>
+              <span className="text-xl font-semibold text-slate-900">{money(data.costPerOrder)}</span>
             </div>
           </div>
-          <div className="space-y-4">
+          <div className="mt-2 space-y-2">
             {data.breakdown.map((item, rank) => {
               const share = data.totalFFShipping ? item.amount / data.totalFFShipping * 100 : 0;
               return (
-                <div key={item.key} className="flex items-start gap-3">
-                  <span className="pt-0.5 text-xs font-semibold tabular-nums text-slate-400">{String(rank + 1).padStart(2, "0")}</span>
-                  <div className="min-w-0 flex-1">
-                    <div className="mb-1.5 flex items-center justify-between gap-2">
-                      <span className="text-xs font-semibold text-slate-800">{item.label}</span>
-                      <span className="text-sm font-semibold tabular-nums text-slate-900">{money(item.displayValue)}</span>
-                    </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full" style={{ width: `${share}%`, backgroundColor: item.color }} /></div>
-                    <div className="mt-1 text-right text-[11px] tabular-nums text-slate-400">{share.toFixed(1)}%</div>
-                  </div>
+                <div key={item.key} className="flex items-center gap-2.5 border border-slate-100 bg-slate-50 px-3 py-2.5">
+                  <span className="h-3 w-3 shrink-0 rounded-[2px]" style={{ backgroundColor: item.color }} />
+                  <span className="min-w-0 flex-1 text-xs font-medium text-slate-700">{String(rank + 1).padStart(2, "0")} · {item.label}</span>
+                  <span className="text-[11px] tabular-nums text-slate-500">{share.toFixed(1)}%</span>
+                  <span className="text-xs font-semibold tabular-nums text-slate-900">{money(item.displayValue)}</span>
                 </div>
               );
             })}
@@ -577,53 +610,110 @@ export default function ControlTower({ client }: { client: TowerClient }) {
         </div>
       </TowerPanel>
 
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
-        <TowerPanel title="Cost per order (FF + shipping)" detail="Average fulfilment + shipping cost for each destination country" className="xl:col-span-7"
+      <div className="grid grid-cols-1 items-stretch gap-5 xl:grid-cols-12">
+        <TowerPanel title="Cost per order (FF + Shipping)" detail="Destination cost mix · all countries shown" className="h-full xl:col-span-5"
           right={<div className="text-right"><div className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Blended average / order</div><div className="text-lg font-semibold text-slate-900">{money(data.costPerOrder)}</div></div>}>
-          <div className="h-[335px] min-w-0">
+          <div className="relative h-[265px] min-w-0" aria-label="Share of combined fulfilment and shipping spend by country">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data.countries} layout="vertical" margin={{ left: 16, right: 30, top: 5, bottom: 5 }}>
-                <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" horizontal={false} />
-                <XAxis type="number" domain={[0, "dataMax"]} tickFormatter={v => `£${v}`} tick={{ fontSize: 11, fill: "#64748b" }} stroke="#cbd5e1" />
-                <YAxis dataKey="country" type="category" width={112} tick={{ fontSize: 11, fill: "#64748b" }} stroke="#cbd5e1" />
-                <Tooltip formatter={(value: number) => [money(Number(value)), "Avg. FF + shipping per order"]} contentStyle={{ fontSize: 12, border: "1px solid #e2e8f0" }} />
-                <Bar dataKey="avgCost" fill="#4f46e5" radius={[0, 4, 4, 0]} maxBarSize={20} />
-              </BarChart>
+              <PieChart>
+                <Pie data={data.countries} dataKey="totalCost" nameKey="country" cx="50%" cy="50%"
+                  innerRadius={68} outerRadius={111} paddingAngle={1.5} stroke="#fff" strokeWidth={2}>
+                  {data.countries.map(c => <Cell key={c.code} fill={c.color} />)}
+                </Pie>
+                <Tooltip formatter={(value: number) => [money(Number(value)), "Allocated order costs"]}
+                  contentStyle={{ fontSize: 12, border: "1px solid #e2e8f0" }} />
+              </PieChart>
             </ResponsiveContainer>
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Destinations</span>
+              <span className="text-xl font-semibold text-slate-900">{data.countries.length}</span>
+            </div>
           </div>
-          <div className="mt-1 border-t border-slate-100 pt-3 text-[11px] text-slate-500">
-            All destinations are shown separately; there is no grouped “Other” country.
+          <div className="mt-2 space-y-1.5 border-t border-slate-100 pt-3">
+            {data.countries.map(c => (
+              <div key={c.code} className="flex items-center gap-2 text-[11px]">
+                <span className="h-2.5 w-2.5 shrink-0 rounded-[2px]" style={{ backgroundColor: c.color }} />
+                <span className="min-w-0 flex-1 text-slate-600">{c.country}</span>
+                <span className="tabular-nums text-slate-400">{count(c.orders)} orders</span>
+                <span className="w-[65px] text-right font-semibold tabular-nums text-slate-800">{money(c.avgCost)}</span>
+              </div>
+            ))}
           </div>
+          <p className="mt-3 text-[11px] leading-4 text-slate-500">Pie slices represent each country’s share of total FF + shipping spend. Values at right show average cost per order.</p>
         </TowerPanel>
 
-        <TowerPanel title="Orders despatched" detail="Order volume by sales channel over the selected period" className="xl:col-span-5"
+        <TowerPanel title="Orders by channel" detail="Weekly despatches · individual stores within each channel" className="h-full xl:col-span-7"
           right={<span className="text-sm font-semibold tabular-nums text-slate-800">{count(data.orders)} total</span>}>
-          <div className="h-[285px] min-w-0 pt-3">
+          <div className="h-[300px] min-w-0 pt-2">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data.periods} margin={{ left: 0, right: 10, top: 10, bottom: 15 }}>
+              <BarChart data={data.periods} margin={{ left: 0, right: 8, top: 10, bottom: 12 }}>
                 <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#64748b" }} stroke="#cbd5e1" interval={0} angle={data.periods.length > 7 ? -30 : 0} textAnchor={data.periods.length > 7 ? "end" : "middle"} height={data.periods.length > 7 ? 55 : 35} />
-                <YAxis tick={{ fontSize: 11, fill: "#64748b" }} stroke="#cbd5e1" width={45} />
-                <Tooltip formatter={(value: number, name: string) => [count(Number(value)), orderChannels.find(c => c.key === name)?.label || name]}
+                <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#64748b" }} stroke="#cbd5e1" interval={0}
+                  angle={data.periods.length > 6 ? -27 : 0} textAnchor={data.periods.length > 6 ? "end" : "middle"}
+                  height={data.periods.length > 6 ? 55 : 35} />
+                <YAxis tick={{ fontSize: 11, fill: "#64748b" }} stroke="#cbd5e1" width={46} />
+                <Tooltip formatter={(value: number, name: string) => [count(Number(value)), name]}
                   contentStyle={{ fontSize: 12, border: "1px solid #e2e8f0" }} />
-                {orderChannels.map((channel, index) => (
-                  <Bar key={channel.key} dataKey={channel.key} name={channel.key} stackId="channels" fill={channel.color}
-                    radius={index === orderChannels.length - 1 ? [3, 3, 0, 0] : undefined} maxBarSize={55} />
+                {orderStores.map((store, index) => (
+                  <Bar key={store.key} dataKey={store.key} name={`${store.channel} · ${store.store}`}
+                    stackId="stores" fill={store.color}
+                    radius={index === orderStores.length - 1 ? [3, 3, 0, 0] : undefined} maxBarSize={54} />
                 ))}
               </BarChart>
             </ResponsiveContainer>
           </div>
-          <div className="mt-3 grid grid-cols-2 gap-2 border-t border-slate-100 pt-3 sm:grid-cols-3">
-            {data.channelTotals.map(channel => (
-              <div key={channel.key} className="flex items-center gap-2 text-[11px] text-slate-600">
-                <span className="h-2.5 w-2.5 shrink-0 rounded-[2px]" style={{ backgroundColor: channel.color }} />
-                <span className="min-w-0 truncate">{channel.label}</span>
-                <span className="ml-auto font-semibold tabular-nums text-slate-700">{count(channel.total)}</span>
-              </div>
-            ))}
+          <div className="mt-3 grid grid-cols-1 gap-2 border-t border-slate-100 pt-3 sm:grid-cols-2 lg:grid-cols-3">
+            {["Amazon", "Shopify", "eBay", "TikTok", "Bulk upload"].map(channel => {
+              const stores = data.channelTotals.filter(s => s.channel === channel);
+              return (
+                <div key={channel} className="border border-slate-100 bg-slate-50/80 px-3 py-2.5">
+                  <div className="mb-2 flex items-center justify-between gap-2 text-xs font-semibold text-slate-800">
+                    <span>{channel}</span><span className="tabular-nums">{count(stores.reduce((sum, s) => sum + s.total, 0))}</span>
+                  </div>
+                  {stores.map(store => (
+                    <div key={store.key} className="flex items-center gap-2 py-0.5 text-[11px] text-slate-600">
+                      <span className="h-2.5 w-2.5 shrink-0 rounded-[2px]" style={{ backgroundColor: store.color }} />
+                      <span className="min-w-0 flex-1">{store.store}</span>
+                      <span className="font-medium tabular-nums">{count(store.total)}</span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
           </div>
         </TowerPanel>
       </div>
+
+      <TowerPanel title="Orders Despatched" detail="Weekly order volumes split by shipping service"
+        right={<span className="text-sm font-semibold tabular-nums text-slate-800">{count(data.orders)} total despatched</span>}>
+        <div className="h-[300px] min-w-0 pt-2">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data.periods} margin={{ left: 0, right: 15, top: 10, bottom: 15 }}>
+              <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#64748b" }} stroke="#cbd5e1" interval={0}
+                angle={data.periods.length > 9 ? -25 : 0} textAnchor={data.periods.length > 9 ? "end" : "middle"}
+                height={data.periods.length > 9 ? 55 : 35} />
+              <YAxis tick={{ fontSize: 11, fill: "#64748b" }} stroke="#cbd5e1" width={45} />
+              <Tooltip formatter={(value: number, name: string) => [count(Number(value)), name]}
+                contentStyle={{ fontSize: 12, border: "1px solid #e2e8f0" }} />
+              {orderServices.map((service, index) => (
+                <Bar key={service.key} dataKey={service.key} name={service.label}
+                  stackId="services" fill={service.color}
+                  radius={index === orderServices.length - 1 ? [3, 3, 0, 0] : undefined} maxBarSize={70} />
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="mt-3 grid grid-cols-1 gap-3 border-t border-slate-100 pt-3 sm:grid-cols-3">
+          {data.serviceTotals.map(service => (
+            <div key={service.key} className="flex items-center gap-3 border border-slate-100 bg-slate-50/80 px-3 py-3 text-xs">
+              <span className="h-3.5 w-3.5 shrink-0 rounded-[2px]" style={{ backgroundColor: service.color }} />
+              <span className="min-w-0 flex-1 font-medium text-slate-700">{service.label}</span>
+              <span className="text-sm font-semibold tabular-nums text-slate-900">{count(service.total)}</span>
+            </div>
+          ))}
+        </div>
+      </TowerPanel>
 
     </div>
   );

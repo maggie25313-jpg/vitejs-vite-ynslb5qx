@@ -1,31 +1,29 @@
-# Control Tower — Phase 3 demo (v4)
+# Control Tower — Phase 3 demo (v6)
 
-This update changes **only the Control Tower tab**. Inventory Health, Inbound/Delivery, and Data Hub remain unchanged.
+This revision changes **only the Control Tower tab**. Inventory Health, Inbound/Delivery and Data Hub have not been edited.
 
-## Included in this version
+## Updated dashboard
 
-- Eight headline KPIs. **Cost per order** is fulfilment (pick & pack) + shipping only.
-- **Per order breakdown** now contains only those two directly attributable charges, ranked highest first. Its two displayed amounts add up exactly to the Cost per order KPI, to the penny.
-- A new **CS Queries** panel underneath Per order breakdown, with illustrative counts for delivery enquiries, undelivered parcels, returns/RTS, lost-in-network, and damaged-delivery queries. Counts follow the selected date range and client.
-- Stacked **Orders despatched** chart segmented by Amazon, Shopify, eBay, TikTok, and Bulk upload. Every period's channel counts sum to its order total; the chart also shows a clearly aligned channel colour key.
-- Stacked **Invoice breakdown** continues to show Storage, Pick & Pack, Shipping, Inbound, Kitting, and Other as total invoice charges (not per-order allocations). Its colour key now appears underneath in neat, aligned cells with corresponding category totals. Kitting disappears from the chart **and its colour key** when unchecked.
-- Kitting toggle is a demo-only proxy for future client settings. Kitting changes invoice totals, but correctly does **not** affect Cost per order, because kitting is no longer included in that metric.
-- **Cost per order by country** displays all example countries separately: United Kingdom, Netherlands, Germany, France, Ireland and Spain. There is no combined Other category or domestic/international filter.
-- Delivery on Time and Damaged/Quarantine remain yellow placeholders with no values pending GECO and stock reclassification respectively.
-- Existing date presets (7, 14, 30, 60 days), custom date filtering, client selector and CSV export retained. The CSV now includes the CS breakdown and despatched channel splits.
+- Invoice breakdown categories (in display order): **Inbound, Pick & Pack, Storage, B2B, VAS, Shipping**. Six individual colour-key entries and a stacked chart. Kitting is illustrated as an optional component **inside VAS**; when toggled off, other VAS charges remain.
+- **Per order breakdown** is now a doughnut/pie chart showing the directly attributable costs **Pick & Pack + Shipping**. The two cost amounts and header match the Cost per order KPI; Storage/Inbound/B2B/VAS stay invoice-only.
+- **Orders by channel** is the renamed former Orders Despatched chart. It is a weekly stacked bar chart with example storefronts: Amazon Store 1, Shopify Stores 1–2, eBay Stores 1–3, TikTok Store 1 and Bulk upload. Grouped storefront legend displays channel totals and individual store counts.
+- **Orders Despatched** is a new standalone weekly stacked bar chart split into **Evri International, Evri Domestic Standard and Evri Domestic 24hr**.
+- **Cost per order (FF + Shipping) by country** is now a doughnut/pie chart with all six countries individually listed. The slices show **share of total allocated spend** (which is additive); the accompanying country legend shows **average cost per order** for each country. Averages themselves are not suitable pie slices.
+- Full-width CS Queries panel, KPI cards, future GECO/stock-reclassification placeholders, date presets/custom range and CSV export remain available.
+- All costs and counts are illustrative. Date filters, client selection and the kitting demo toggle dynamically update the charts and CSV.
 
-## Important production notes
+## Data checks
 
-**No real data or Spike billing integration is included.** Illustrative figures and rates are generated locally. Reconcile costs with client-specific Spike rates and actual invoice lines before production.
+- Store counts, service counts and orders despatched reconcile in every weekly bin and for the full selected period.
+- The country cost allocation totals equal Pick & Pack + Shipping spend. The invoice-category total equals the sum of all six categories.
+- Weeks are seven-day periods starting on the selected reporting start date, with a partial final period when needed.
 
-- Storage, inbound, kitting and other costs are invoice-category charges but **not** part of the per-order fulfilment + shipping breakdown.
-- CS queries are synthetic in this demo. Live ticket/issue source, deduplication and definitions must be agreed.
-- Channel data is synthetic. Production should map WMS order source/channel fields.
-- DoT should use the agreed Expected Despatch/operational deadline policy and must include missed/undispatched eligible orders.
-- Cost-per-country must use actual destination countries rather than a generic "Other" grouping.
+## Production integration
 
-## Deploying
+Spike billing data, order-to-store mappings, shipping-service classification, and CS support metrics need production source connections. Kitting setting should be read from client configuration rather than the demo checkbox. DoT must use agreed expected despatch/operational deadline rules and include eligible, missed/undispatched orders.
 
-This ZIP is **root-flat**, matching the repository root layout shown in GitHub. Upload the project files directly into the repository root (including `src` and `public`). In Vercel, leave Root Directory at `./`.
+## Deploy
 
-Run `npm ci` and `npm run build` in your normal environment, then redeploy Vercel. No new npm dependencies were introduced. The TypeScript syntax was validated, but a full npm/Vite build was not possible in this environment.
+This ZIP has project files at repository root (`src/`, `public/`, `package.json`). Upload into the root of the GitHub repository and keep Vercel Root Directory set to `./`.
+
+Run `npm ci && npm run build` in an environment with npm registry access. No new dependencies are required (Recharts Pie is already included). The TypeScript source syntax and demonstration arithmetic were validated here; a complete build could not be performed in this container because the npm cache lacks required packages.
