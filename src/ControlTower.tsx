@@ -4,6 +4,7 @@ import {
   ArrowDownToLine,
   CalendarDays,
   Clock3,
+  MessageCircle,
   Package2,
   Percent,
   PoundSterling,
@@ -109,13 +110,6 @@ type SamplePeriod = {
   total: number;
 } & Record<InvoicePart | StoreKey | ServiceKey, number>;
 
-const csQueryTypes = [
-  { label: "Delivery enquiries", share: 0.019, color: "#2563eb" },
-  { label: "Undelivered parcels", share: 0.012, color: "#f59e0b" },
-  { label: "Returns / RTS", share: 0.010, color: "#64748b" },
-  { label: "Lost in network", share: 0.006, color: "#d946ef" },
-  { label: "Damaged deliveries", share: 0.004, color: "#e87950" },
-] as const;
 const invoicePartLabels: Record<InvoicePart, string> = {
   inbound: "Inbound",
   pickPack: "Pick & Pack",
@@ -268,12 +262,6 @@ function createSample(client: TowerClient, startDate: Date, dayCount: number, ki
     ...item,
     displayValue: item.key === "pickPack" ? pickPackPence / 100 : (displayedCostPence - pickPackPence) / 100,
   }));
-  const variation = 1 + 0.10 * Math.sin(Math.floor(startDate.getTime() / 86400000) / 11 + rates.multiplier);
-  const csQueries = csQueryTypes.map(issue => ({
-    ...issue,
-    total: Math.max(0, Math.round(orders * issue.share * variation)),
-  })).sort((a, b) => b.total - a.total);
-  const csTotal = csQueries.reduce((sum, issue) => sum + issue.total, 0);
   const channelTotals = orderStores.map(store => ({
     ...store,
     total: periods.reduce((sum, period) => sum + period[store.key], 0),
@@ -291,7 +279,7 @@ function createSample(client: TowerClient, startDate: Date, dayCount: number, ki
     costPerPick: rates.pickPack / 1.6, // Demo assumption: 1.6 picks per order
     pickPackPerOrder: avgPickPack,
     shippingPerOrder: avgShipping,
-    csQueries, csTotal, channelTotals, serviceTotals,
+    channelTotals, serviceTotals,
     stockValue: rates.stockValue, onTime: dotOnTime,
     dot: orders ? dotOnTime / orders * 100 : 0,
     fillRate, backorders: Math.max(0, Math.round(orders * (100 - fillRate) / 100)),
@@ -359,6 +347,18 @@ function SpikePending({ minHeight = 270 }: { minHeight?: number }) {
   );
 }
 
+function CSPending() {
+  return (
+    <div className="flex min-h-[138px] flex-col items-center justify-center gap-3 text-center">
+      <div className="flex h-14 w-14 items-center justify-center rounded-full border border-amber-200 bg-amber-100/60">
+        <MessageCircle className="h-7 w-7 text-amber-400" />
+      </div>
+      <div className="text-2xl font-semibold leading-none text-amber-700">—</div>
+      <div className="text-xs font-semibold uppercase tracking-wider text-amber-700">No data</div>
+    </div>
+  );
+}
+
 function exportCsv(rows: (string | number)[][], filename: string) {
   const csv = rows.map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\r\n");
   const blob = new Blob(["\ufeff", csv], { type: "text/csv;charset=utf-8" });
@@ -404,9 +404,7 @@ export default function ControlTower({ client }: { client: TowerClient }) {
       ["Fill rate, %", data.fillRate.toFixed(2)],
       ["Backorders", data.backorders],
       ["Financial metrics", "Unavailable until Spike integration"],
-      [],
-      ["CS query type", "Cases raised (demo)"],
-      ...data.csQueries.map(q => [q.label, q.total]),
+      ["CS Queries", "Unavailable until CS data integration"],
       [],
       ["Period", "Orders", ...orderStores.map(st => `${st.channel} ${st.store}`), ...orderServices.map(s => s.label)],
       ...data.periods.map(p => [p.label, p.orders, ...orderStores.map(st => p[st.key]), ...orderServices.map(s => p[s.key])]),
@@ -499,26 +497,9 @@ export default function ControlTower({ client }: { client: TowerClient }) {
         </TowerPanel>
       </div>
 
-      <TowerPanel title="CS Queries"
-        right={<div className="text-right"><div className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Total cases</div><div className="text-2xl font-semibold tracking-tight text-slate-900">{count(data.csTotal)}</div></div>}>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-          {data.csQueries.map((issue, rank) => {
-            const share = data.csTotal ? issue.total / data.csTotal * 100 : 0;
-            return (
-              <div key={issue.label} className="min-w-0 border border-slate-200 bg-slate-50/70 px-4 py-4">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[11px] font-semibold tabular-nums text-slate-400">{String(rank + 1).padStart(2, "0")}</span>
-                  <span className="text-[11px] font-medium tabular-nums text-slate-500">{share.toFixed(1)}% of queries</span>
-                </div>
-                <div className="mt-2 min-h-[38px] text-xs font-semibold leading-5 text-slate-700">{issue.label}</div>
-                <div className="mt-1 text-2xl font-semibold tabular-nums tracking-tight text-slate-900">{count(issue.total)}</div>
-                <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-200" role="img" aria-label={`${issue.label}: ${share.toFixed(1)} percent of all queries`}>
-                  <div className="h-full rounded-full" style={{ width: `${share}%`, backgroundColor: issue.color }} />
-                </div>
-              </div>
-            );
-          })}
-        </div>
+      <TowerPanel title="CS Queries" future
+        right={<span className="text-[11px] font-semibold uppercase tracking-wider text-amber-700">CS integration pending</span>}>
+        <CSPending />
       </TowerPanel>
 
       <div className="grid grid-cols-1 items-stretch gap-5 xl:grid-cols-12">

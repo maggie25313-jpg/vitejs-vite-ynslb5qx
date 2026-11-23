@@ -1,24 +1,21 @@
-# Control Tower – Phase 3 (v7)
+# Control Tower – Phase 3 (v8)
 
 ## Current demonstration view
 
-- Minimal copy: no descriptive subtitles beneath the page heading, KPI cards or chart headings; unnecessary notes removed.
-- WMS-oriented example metrics remain active: Stock Held (GBP, based on SKU cost prices), Orders Despatched, Warehouse DoT, Fill Rate and Backorders.
-- Order breakdowns remain active: CS Queries, Orders by Channel (including Shopify and eBay storefronts) and Orders Despatched by shipping service.
-- Date filters: 7, 14, 30, 60 days and custom dates. Client access/filter behaviour unchanged.
+- Clean layout: reduced descriptive text and retained existing filters and operational charts.
+- WMS-oriented illustrative metrics remain active: Stock Held (GBP), Orders Despatched, Warehouse DoT, Fill Rate and Backorders.
+- Operational charts remain active: Orders by Channel (including storefronts) and Orders Despatched by shipping service.
+- Date filters: 7, 14, 30, 60 days and custom dates; client access/filter behaviour unchanged.
 
-## Deferred integration placeholders
+## Future integrations – placeholders only
 
-Until the integrations are available, these display **pale amber panels, no figures**, rather than mock financial values:
-- Cost per Order KPI
-- Invoice Breakdown
-- Per Order Breakdown
-- Cost per Order (FF + Shipping) by country
+- Cost per Order KPI, Invoice Breakdown, Per Order Breakdown, and Cost per Order (FF + Shipping) by country: pale yellow / no values, pending Spike.
+- CS Queries: pale yellow / no values, pending CS ticket-data integration.
+- Delivery on Time: pale yellow / no values, pending GECO.
+- Damaged / Quarantine: pale yellow / no values, pending stock reclassification module.
 
-Delivery on Time stays amber pending GECO; Damaged/Quarantine stays amber pending Stock Reclassification.
-
-The CSV demo download does not export financial values for deferred Spike features.
+The CSV demo download no longer contains sample CS query counts or invented financial figures for deferred integrations.
 
 ## Deployment
 
-Upload project contents to the repository root and leave Vercel Root Directory as `./`.
+Upload contents of this ZIP to the GitHub repository root; Vercel Root Directory remains `./`.
