@@ -1,21 +1,26 @@
-# Control Tower – Phase 3 (v8)
+# Control Tower – Phase 3 (v9)
 
-## Current demonstration view
+## Integration preview switches
 
-- Clean layout: reduced descriptive text and retained existing filters and operational charts.
-- WMS-oriented illustrative metrics remain active: Stock Held (GBP), Orders Despatched, Warehouse DoT, Fill Rate and Backorders.
-- Operational charts remain active: Orders by Channel (including storefronts) and Orders Despatched by shipping service.
-- Date filters: 7, 14, 30, 60 days and custom dates; client access/filter behaviour unchanged.
+Four unchecked demo switches appear beneath the date filters:
 
-## Future integrations – placeholders only
+- **Spike integration done**: unlocks the Cost per Order KPI, Invoice Breakdown stacked bars (Inbound, Pick & Pack, Storage, B2B, VAS, Shipping), Per Order Breakdown doughnut, and Cost per Order by Country doughnut. The Invoice panel retains the demo Kitting enabled checkbox, affecting VAS charges. Costs update with the client and reporting period. Unchecking Spike restores all corresponding yellow placeholders with no figures.
+- **GECO integration done**: replaces the yellow Delivery on Time KPI with an illustrative delivery percentage for the selected period. Unchecking restores the placeholder.
+- **Stock reclassification done**: replaces the yellow Damaged / Quarantine KPI with a demonstration stock unit count; a hover tooltip shows illustrative stock value. Unchecking restores the placeholder.
 
-- Cost per Order KPI, Invoice Breakdown, Per Order Breakdown, and Cost per Order (FF + Shipping) by country: pale yellow / no values, pending Spike.
-- CS Queries: pale yellow / no values, pending CS ticket-data integration.
-- Delivery on Time: pale yellow / no values, pending GECO.
-- Damaged / Quarantine: pale yellow / no values, pending stock reclassification module.
+The checkboxes **simulate completion for UI previews only**; no live integrations are connected, and they start unchecked on page load. The exported demo CSV respects the switches and excludes unavailable figures.
 
-The CSV demo download no longer contains sample CS query counts or invented financial figures for deferred integrations.
+CS integration done is a fourth demo switch. When checked, CS Queries displays a ranked five-category sample breakdown with percentages, counts and an export; when unchecked, it remains a yellow No Data placeholder. No real CS ticket feed is connected. Existing Inventory, Inbound/Delivery, Data Hub, client selector, and date filter functionality are unchanged.
 
 ## Deployment
 
-Upload contents of this ZIP to the GitHub repository root; Vercel Root Directory remains `./`.
+Upload ZIP contents directly to the GitHub repository root, retaining the Vercel root directory `./`.
+
+
+## v10 change: chart percentages
+- Orders by channel stacked-bar tooltips now show counts and percentages of the hovered week’s total orders. Individual stores and channel summary tiles show counts and percentages of all orders in the selected reporting range.
+- Orders Despatched by service stacked-bar tooltips now show counts and percentages of the hovered week’s total orders. The service summary cards show counts and percentages of all orders in the selected reporting range.
+- All percentages respond to date/client filters and use one decimal place.
+
+## v10 addition: CS integration demo toggle
+- Added an unchecked **CS integration done** checkbox. When enabled, the CS Queries panel presents date/client-responsive sample cases for Delivery enquiries, Undelivered parcels, Returns/RTS, Lost in network, and Damaged deliveries. Exported demo CSV includes these only when enabled.

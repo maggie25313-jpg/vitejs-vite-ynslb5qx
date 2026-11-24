@@ -15,6 +15,9 @@ import {
 import {
   Bar,
   BarChart,
+  Cell,
+  Pie,
+  PieChart,
   CartesianGrid,
   ResponsiveContainer,
   Tooltip,
@@ -110,6 +113,14 @@ type SamplePeriod = {
   total: number;
 } & Record<InvoicePart | StoreKey | ServiceKey, number>;
 
+const csQueryTypes = [
+  { label: "Delivery enquiries", share: 0.019, color: "#2563eb" },
+  { label: "Undelivered parcels", share: 0.012, color: "#f59e0b" },
+  { label: "Returns / RTS", share: 0.010, color: "#64748b" },
+  { label: "Lost in network", share: 0.006, color: "#d946ef" },
+  { label: "Damaged deliveries", share: 0.004, color: "#e87950" },
+] as const;
+
 const invoicePartLabels: Record<InvoicePart, string> = {
   inbound: "Inbound",
   pickPack: "Pick & Pack",
@@ -125,6 +136,9 @@ const GBP0 = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP"
 const NUM = new Intl.NumberFormat("en-GB");
 const money = (amount: number) => GBP.format(amount);
 const count = (amount: number) => NUM.format(Math.round(amount));
+// Shares use the total orders for the hovered weekly bar or the selected date range.
+const orderShare = (orders: number, totalOrders: number) =>
+  totalOrders > 0 ? `${((orders / totalOrders) * 100).toFixed(1)}%` : "0.0%";
 const isoDate = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 const dateFromISO = (value: string) => new Date(`${value}T12:00:00`);
 const offsetDate = (date: Date, days: number) => {
@@ -262,6 +276,13 @@ function createSample(client: TowerClient, startDate: Date, dayCount: number, ki
     ...item,
     displayValue: item.key === "pickPack" ? pickPackPence / 100 : (displayedCostPence - pickPackPence) / 100,
   }));
+  // Illustrative CS case breakdown follows the same client and date selection as the order charts.
+  const variation = 1 + 0.10 * Math.sin(Math.floor(startDate.getTime() / 86400000) / 11 + rates.multiplier);
+  const csQueries = csQueryTypes.map(issue => ({
+    ...issue,
+    total: Math.max(0, Math.round(orders * issue.share * variation)),
+  })).sort((a, b) => b.total - a.total);
+  const csTotal = csQueries.reduce((sum, issue) => sum + issue.total, 0);
   const channelTotals = orderStores.map(store => ({
     ...store,
     total: periods.reduce((sum, period) => sum + period[store.key], 0),
@@ -272,6 +293,11 @@ function createSample(client: TowerClient, startDate: Date, dayCount: number, ki
   }));
   const dotOnTime = Math.min(orders, Math.round(orders * (0.975 + 0.002 * Math.sin(dayCount / 7 + rates.multiplier))));
   const fillRate = 98.3 - (client === "test" ? 0.65 : client === "api" ? -0.22 : 0);
+  // Sample values become visible only when the corresponding demo switches are enabled.
+  // Delivery performance uses the selected reporting period; quarantine is a current snapshot.
+  const deliveryOnTime = Math.min(99.9, Math.max(0, 95.6 + 0.35 * Math.cos(dayCount / 17 + rates.multiplier)));
+  const quarantineUnits = Math.max(0, Math.round(126 * rates.multiplier));
+  const quarantineValue = Math.round(quarantineUnits * (rates.stockValue / (62000 * rates.multiplier)));
 
   return {
     periods, orders, countries, expenses, totalCharges, totalFFShipping,
@@ -279,10 +305,11 @@ function createSample(client: TowerClient, startDate: Date, dayCount: number, ki
     costPerPick: rates.pickPack / 1.6, // Demo assumption: 1.6 picks per order
     pickPackPerOrder: avgPickPack,
     shippingPerOrder: avgShipping,
-    channelTotals, serviceTotals,
+    channelTotals, serviceTotals, csQueries, csTotal,
     stockValue: rates.stockValue, onTime: dotOnTime,
     dot: orders ? dotOnTime / orders * 100 : 0,
     fillRate, backorders: Math.max(0, Math.round(orders * (100 - fillRate) / 100)),
+    deliveryOnTime, quarantineUnits, quarantineValue,
     rates,
   };
 }
@@ -376,6 +403,11 @@ export default function ControlTower({ client }: { client: TowerClient }) {
   const today = new Date();
   const yesterdayISO = isoDate(offsetDate(today, -1));
   const oldestISO = isoDate(offsetDate(today, -180));
+  const [spikeDone, setSpikeDone] = useState(false);
+  const [gecoDone, setGecoDone] = useState(false);
+  const [reclassificationDone, setReclassificationDone] = useState(false);
+  const [csDone, setCsDone] = useState(false);
+  const [kittingEnabled, setKittingEnabled] = useState(true);
   const [preset, setPreset] = useState<TowerPreset>("30");
   const [isCustom, setIsCustom] = useState(false);
   const [from, setFrom] = useState(isoDate(offsetDate(today, -30)));
@@ -388,7 +420,8 @@ export default function ControlTower({ client }: { client: TowerClient }) {
   const end = isCustom && rangeValid ? to : yesterdayISO;
   const start = isCustom && rangeValid ? from : isoDate(offsetDate(dateFromISO(end), 1 - Number(preset)));
   const dayCount = isCustom && rangeValid ? diffDaysInclusive(start, end) : Number(preset);
-  const data = useMemo(() => createSample(client, dateFromISO(start), dayCount, false), [client, start, dayCount]);
+  const data = useMemo(() => createSample(client, dateFromISO(start), dayCount, kittingEnabled), [client, start, dayCount, kittingEnabled]);
+  const activeInvoiceParts = invoiceParts;
   const filenamePrefix = `Control_Tower_DEMO_${client}_${start}_to_${end}`;
 
   const exportSnapshot = () => {
@@ -403,8 +436,32 @@ export default function ControlTower({ client }: { client: TowerClient }) {
       ["Warehouse DoT, %", data.dot.toFixed(2)],
       ["Fill rate, %", data.fillRate.toFixed(2)],
       ["Backorders", data.backorders],
-      ["Financial metrics", "Unavailable until Spike integration"],
-      ["CS Queries", "Unavailable until CS data integration"],
+      ["Spike integration (demo switch)", spikeDone ? "Enabled" : "Pending"],
+      ["GECO integration (demo switch)", gecoDone ? "Enabled" : "Pending"],
+      ["Stock reclassification (demo switch)", reclassificationDone ? "Enabled" : "Pending"],
+      ["CS integration (demo switch)", csDone ? "Enabled" : "Pending"],
+      ["Cost per order GBP", spikeDone ? data.costPerOrder.toFixed(2) : "Unavailable until Spike integration"],
+      ["Invoice charges GBP", spikeDone ? data.totalCharges.toFixed(2) : "Unavailable until Spike integration"],
+      ["Delivery on time %", gecoDone ? data.deliveryOnTime.toFixed(2) : "Unavailable until GECO integration"],
+      ["Damaged / quarantine units", reclassificationDone ? data.quarantineUnits : "Unavailable until reclassification"],
+      ["Damaged / quarantine stock value GBP", reclassificationDone ? data.quarantineValue : "Unavailable until reclassification"],
+      ["CS Queries", csDone ? data.csTotal : "Unavailable until CS data integration"],
+      ...(csDone ? [
+        [],
+        ["CS query type", "Cases raised (demo)"],
+        ...data.csQueries.map(q => [q.label, q.total]),
+      ] as (string | number)[][] : []),
+      ...(spikeDone ? [
+        [],
+        ["Invoice category", "Total GBP"],
+        ...invoiceParts.map(part => [invoicePartLabels[part], data.expenses[part].toFixed(2)]),
+        [],
+        ["Per order cost", "Average GBP"],
+        ...data.breakdown.map(part => [part.label, part.displayValue.toFixed(2)]),
+        [],
+        ["Country", "Orders", "Total cost GBP", "Average cost per order GBP"],
+        ...data.countries.map(c => [c.country, c.orders, c.totalCost.toFixed(2), c.avgCost.toFixed(2)]),
+      ] as (string | number)[][] : []),
       [],
       ["Period", "Orders", ...orderStores.map(st => `${st.channel} ${st.store}`), ...orderServices.map(s => s.label)],
       ...data.periods.map(p => [p.label, p.orders, ...orderStores.map(st => p[st.key]), ...orderServices.map(s => p[s.key])]),
@@ -467,46 +524,196 @@ export default function ControlTower({ client }: { client: TowerClient }) {
       </div>
 
 
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border border-slate-200 bg-white px-4 py-3 shadow-sm" aria-label="Demo integration switches">
+        <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-slate-700">
+          <input type="checkbox" checked={spikeDone} onChange={e => setSpikeDone(e.target.checked)}
+            className="h-4 w-4 accent-blue-600" /> Spike integration done
+        </label>
+        <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-slate-700">
+          <input type="checkbox" checked={gecoDone} onChange={e => setGecoDone(e.target.checked)}
+            className="h-4 w-4 accent-blue-600" /> GECO integration done
+        </label>
+        <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-slate-700">
+          <input type="checkbox" checked={reclassificationDone} onChange={e => setReclassificationDone(e.target.checked)}
+            className="h-4 w-4 accent-blue-600" /> Stock reclassification done
+        </label>
+        <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-slate-700">
+          <input type="checkbox" checked={csDone} onChange={e => setCsDone(e.target.checked)}
+            className="h-4 w-4 accent-blue-600" /> CS integration done
+        </label>
+      </div>
+
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <TowerKpi label="Stock held (GBP)" value={GBP0.format(data.stockValue)} icon={Warehouse}
           tooltip="Snapshot of stock held at cost value in GBP. Date filters do not change this illustrative current-stock figure." />
         <TowerKpi label="Orders despatched" value={count(data.orders)} icon={Package2}
           tooltip="Demonstration count of orders despatched during the selected reporting period." />
-        <TowerKpi label="Cost per order" value="—" icon={PoundSterling} future
-          tooltip="Requires Spike billing integration for client-specific pick & pack and shipping costs." />
+        <TowerKpi label="Cost per order" value={spikeDone ? money(data.costPerOrder) : "—"} icon={PoundSterling} future={!spikeDone}
+          tooltip={spikeDone ? "Illustrative average pick & pack plus shipping cost per order." : "Requires Spike billing integration for client-specific pick & pack and shipping costs."} />
         <TowerKpi label="Warehouse DoT (overall)" value={`${data.dot.toFixed(2)}%`} icon={Clock3}
           tooltip="Illustrative DoT. Live calculation should use Expected Despatch to determine due day and check actual despatch against the agreed operational deadline." />
         <TowerKpi label="Fill rate" value={`${data.fillRate.toFixed(2)}%`} icon={Percent}
           tooltip="Illustrative order fill rate. Final definition should be confirmed with Operations, including partial shipments and backorders." />
-        <TowerKpi label="Delivery on time" value="—" icon={Truck} future
-          tooltip="No data yet. Delivery on time will be added when GECO integration is available and carrier delivery targets are agreed." />
-        <TowerKpi label="Damaged / quarantine" value="—" icon={AlertTriangle} future
-          tooltip="No data yet. Damaged and quarantine stock reporting will follow the separate stock reclassification task." />
+        <TowerKpi label="Delivery on time" value={gecoDone ? `${data.deliveryOnTime.toFixed(2)}%` : "—"} icon={Truck} future={!gecoDone}
+          tooltip={gecoDone ? "Illustrative carrier delivery performance for the selected reporting period." : "No data yet. Delivery on time will be added when GECO integration is available."} />
+        <TowerKpi label="Damaged / quarantine" value={reclassificationDone ? `${count(data.quarantineUnits)} units` : "—"} icon={AlertTriangle} future={!reclassificationDone}
+          tooltip={reclassificationDone ? `Illustrative current stock: ${count(data.quarantineUnits)} units, ${GBP0.format(data.quarantineValue)} at cost value.` : "No data yet. Damaged and quarantine stock reporting will follow stock reclassification."} />
         <TowerKpi label="Backorders" value={count(data.backorders)} icon={ShoppingCart}
           tooltip="Demonstration only. Live backorder count requires agreed WMS status rules and eligibility criteria." />
       </div>
 
       <div className="grid grid-cols-1 items-stretch gap-5 xl:grid-cols-12">
-        <TowerPanel title="Invoice breakdown" future className="h-full xl:col-span-8"
-          right={<span className="text-[11px] font-semibold uppercase tracking-wider text-amber-700">Spike pending</span>}>
-          <SpikePending minHeight={295} />
+        {spikeDone ? (
+        <TowerPanel title="Invoice breakdown" className="h-full xl:col-span-8"
+          right={<div className="flex flex-wrap items-center justify-end gap-4">
+            <label className="inline-flex cursor-pointer items-center gap-2 border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700" title="Demo setting: production will use client configuration">
+              <input type="checkbox" checked={kittingEnabled} onChange={e => setKittingEnabled(e.target.checked)} className="h-4 w-4 accent-blue-600" /> Kitting enabled
+            </label>
+            <div className="text-right"><div className="text-[10px] uppercase tracking-wide text-slate-400">Total charges</div><div className="text-lg font-semibold text-slate-900">{GBP0.format(data.totalCharges)}</div></div>
+          </div>}>
+          <div className="h-[275px] min-w-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={data.periods} margin={{ top: 8, right: 10, bottom: 15, left: 5 }}>
+                <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#64748b" }} stroke="#cbd5e1" interval={0} angle={data.periods.length > 7 ? -30 : 0} textAnchor={data.periods.length > 7 ? "end" : "middle"} height={data.periods.length > 7 ? 56 : 34} />
+                <YAxis tickFormatter={v => `£${Math.round(Number(v)/1000)}k`} tick={{ fontSize: 11, fill: "#64748b" }} stroke="#cbd5e1" width={48} />
+                <Tooltip formatter={(value: number, name: string) => [money(Number(value)), invoicePartLabels[name as InvoicePart] || name]}
+                  contentStyle={{ background: "white", border: "1px solid #e2e8f0", fontSize: 12 }} />
+                {activeInvoiceParts.map((part, index) => (
+                  <Bar key={part} name={part} dataKey={part} stackId="invoice" fill={financeColors[part]}
+                    radius={index === activeInvoiceParts.length - 1 ? [3, 3, 0, 0] : undefined} maxBarSize={56} />
+                ))}
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-2 border-t border-slate-100 pt-4 sm:grid-cols-3" aria-label="Invoice chart colour key">
+            {activeInvoiceParts.map(part => (
+              <div key={part} className="flex min-w-0 items-center gap-2 rounded-sm border border-slate-100 bg-slate-50 px-2.5 py-2">
+                <span className="h-3 w-3 shrink-0 rounded-[2px]" style={{ backgroundColor: financeColors[part] }} />
+                <div className="min-w-0"><div className="truncate text-[11px] font-medium text-slate-700">{invoicePartLabels[part]}</div>
+                  <div className="text-[11px] tabular-nums text-slate-500">{GBP0.format(data.expenses[part])}</div></div>
+              </div>
+            ))}
+          </div>
         </TowerPanel>
-        <TowerPanel title="Per order breakdown" future className="h-full xl:col-span-4"
-          right={<span className="text-[11px] font-semibold uppercase tracking-wider text-amber-700">Spike pending</span>}>
-          <SpikePending minHeight={295} />
+
+        ) : (
+          <TowerPanel title="Invoice breakdown" future className="h-full xl:col-span-8"
+            right={<span className="text-[11px] font-semibold uppercase tracking-wider text-amber-700">Spike pending</span>}>
+            <SpikePending minHeight={295} />
+          </TowerPanel>
+        )}
+        {spikeDone ? (
+        <TowerPanel title="Per order breakdown" className="h-full xl:col-span-4"
+          right={<div className="text-right"><div className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Total / order</div><div className="text-2xl font-semibold tracking-tight text-slate-900">{money(data.costPerOrder)}</div></div>}>
+          <div className="relative h-[230px] min-w-0" aria-label="Share of direct per-order costs shown as a pie chart">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={data.breakdown} dataKey="perOrder" nameKey="label" cx="50%" cy="50%"
+                  innerRadius={57} outerRadius={91} paddingAngle={2} stroke="#ffffff" strokeWidth={2}>
+                  {data.breakdown.map(item => <Cell key={item.key} fill={item.color} />)}
+                </Pie>
+                <Tooltip formatter={(value: number) => [money(Number(value)), "Average per order"]}
+                  contentStyle={{ fontSize: 12, border: "1px solid #e2e8f0" }} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Per order</span>
+              <span className="text-xl font-semibold text-slate-900">{money(data.costPerOrder)}</span>
+            </div>
+          </div>
+          <div className="mt-2 space-y-2">
+            {data.breakdown.map((item, rank) => {
+              const share = data.totalFFShipping ? item.amount / data.totalFFShipping * 100 : 0;
+              return (
+                <div key={item.key} className="flex items-center gap-2.5 border border-slate-100 bg-slate-50 px-3 py-2.5">
+                  <span className="h-3 w-3 shrink-0 rounded-[2px]" style={{ backgroundColor: item.color }} />
+                  <span className="min-w-0 flex-1 text-xs font-medium text-slate-700">{String(rank + 1).padStart(2, "0")} · {item.label}</span>
+                  <span className="text-[11px] tabular-nums text-slate-500">{share.toFixed(1)}%</span>
+                  <span className="text-xs font-semibold tabular-nums text-slate-900">{money(item.displayValue)}</span>
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-xs">
+            <span className="text-slate-500">Cost per pick <strong className="ml-1 text-slate-900">{money(data.costPerPick)}</strong></span>
+          </div>
         </TowerPanel>
+        ) : (
+          <TowerPanel title="Per order breakdown" future className="h-full xl:col-span-4"
+            right={<span className="text-[11px] font-semibold uppercase tracking-wider text-amber-700">Spike pending</span>}>
+            <SpikePending minHeight={295} />
+          </TowerPanel>
+        )}
       </div>
 
-      <TowerPanel title="CS Queries" future
-        right={<span className="text-[11px] font-semibold uppercase tracking-wider text-amber-700">CS integration pending</span>}>
-        <CSPending />
-      </TowerPanel>
+      {csDone ? (
+        <TowerPanel title="CS Queries"
+          right={<div className="text-right"><div className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Total cases</div><div className="text-2xl font-semibold tracking-tight text-slate-900">{count(data.csTotal)}</div></div>}>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            {data.csQueries.map((issue, rank) => {
+              const share = data.csTotal ? issue.total / data.csTotal * 100 : 0;
+              return (
+                <div key={issue.label} className="min-w-0 border border-slate-200 bg-slate-50/70 px-4 py-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-semibold tabular-nums text-slate-400">{String(rank + 1).padStart(2, "0")}</span>
+                    <span className="text-[11px] font-medium tabular-nums text-slate-500">{share.toFixed(1)}%</span>
+                  </div>
+                  <div className="mt-2 min-h-[38px] text-xs font-semibold leading-5 text-slate-700">{issue.label}</div>
+                  <div className="mt-1 text-2xl font-semibold tabular-nums tracking-tight text-slate-900">{count(issue.total)}</div>
+                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-200" role="img" aria-label={`${issue.label}: ${share.toFixed(1)} percent of all queries`}>
+                    <div className="h-full rounded-full" style={{ width: `${share}%`, backgroundColor: issue.color }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </TowerPanel>
+      ) : (
+        <TowerPanel title="CS Queries" future
+          right={<span className="text-[11px] font-semibold uppercase tracking-wider text-amber-700">CS integration pending</span>}>
+          <CSPending />
+        </TowerPanel>
+      )}
 
       <div className="grid grid-cols-1 items-stretch gap-5 xl:grid-cols-12">
-        <TowerPanel title="Cost per order (FF + Shipping)" future className="h-full xl:col-span-5"
-          right={<span className="text-[11px] font-semibold uppercase tracking-wider text-amber-700">Spike pending</span>}>
-          <SpikePending minHeight={480} />
+        {spikeDone ? (
+        <TowerPanel title="Cost per order (FF + Shipping)" className="h-full xl:col-span-5"
+          right={<div className="text-right"><div className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Blended average / order</div><div className="text-lg font-semibold text-slate-900">{money(data.costPerOrder)}</div></div>}>
+          <div className="relative h-[265px] min-w-0" aria-label="Share of combined fulfilment and shipping spend by country">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={data.countries} dataKey="totalCost" nameKey="country" cx="50%" cy="50%"
+                  innerRadius={68} outerRadius={111} paddingAngle={1.5} stroke="#fff" strokeWidth={2}>
+                  {data.countries.map(c => <Cell key={c.code} fill={c.color} />)}
+                </Pie>
+                <Tooltip formatter={(value: number) => [money(Number(value)), "Allocated order costs"]}
+                  contentStyle={{ fontSize: 12, border: "1px solid #e2e8f0" }} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Destinations</span>
+              <span className="text-xl font-semibold text-slate-900">{data.countries.length}</span>
+            </div>
+          </div>
+          <div className="mt-2 space-y-1.5 border-t border-slate-100 pt-3">
+            {data.countries.map(c => (
+              <div key={c.code} className="flex items-center gap-2 text-[11px]">
+                <span className="h-2.5 w-2.5 shrink-0 rounded-[2px]" style={{ backgroundColor: c.color }} />
+                <span className="min-w-0 flex-1 text-slate-600">{c.country}</span>
+                <span className="tabular-nums text-slate-400">{count(c.orders)} orders</span>
+                <span className="w-[65px] text-right font-semibold tabular-nums text-slate-800">{money(c.avgCost)}</span>
+              </div>
+            ))}
+          </div>
         </TowerPanel>
+
+        ) : (
+          <TowerPanel title="Cost per order (FF + Shipping)" future className="h-full xl:col-span-5"
+            right={<span className="text-[11px] font-semibold uppercase tracking-wider text-amber-700">Spike pending</span>}>
+            <SpikePending minHeight={480} />
+          </TowerPanel>
+        )}
 
         <TowerPanel title="Orders by channel" className="h-full xl:col-span-7"
           right={<span className="text-sm font-semibold tabular-nums text-slate-800">{count(data.orders)} total</span>}>
@@ -518,8 +725,9 @@ export default function ControlTower({ client }: { client: TowerClient }) {
                   angle={data.periods.length > 6 ? -27 : 0} textAnchor={data.periods.length > 6 ? "end" : "middle"}
                   height={data.periods.length > 6 ? 55 : 35} />
                 <YAxis tick={{ fontSize: 11, fill: "#64748b" }} stroke="#cbd5e1" width={46} />
-                <Tooltip formatter={(value: number, name: string) => [count(Number(value)), name]}
-                  contentStyle={{ fontSize: 12, border: "1px solid #e2e8f0" }} />
+                <Tooltip formatter={(value: number, name: string, entry: any) => [
+                  `${count(Number(value))} (${orderShare(Number(value), Number(entry?.payload?.orders ?? 0))})`, name
+                ]} contentStyle={{ fontSize: 12, border: "1px solid #e2e8f0" }} />
                 {orderStores.map((store, index) => (
                   <Bar key={store.key} dataKey={store.key} name={`${store.channel} · ${store.store}`}
                     stackId="stores" fill={store.color}
@@ -534,13 +742,13 @@ export default function ControlTower({ client }: { client: TowerClient }) {
               return (
                 <div key={channel} className="border border-slate-100 bg-slate-50/80 px-3 py-2.5">
                   <div className="mb-2 flex items-center justify-between gap-2 text-xs font-semibold text-slate-800">
-                    <span>{channel}</span><span className="tabular-nums">{count(stores.reduce((sum, s) => sum + s.total, 0))}</span>
+                    <span>{channel}</span><span className="tabular-nums whitespace-nowrap">{count(stores.reduce((sum, s) => sum + s.total, 0))} ({orderShare(stores.reduce((sum, s) => sum + s.total, 0), data.orders)})</span>
                   </div>
                   {stores.map(store => (
                     <div key={store.key} className="flex items-center gap-2 py-0.5 text-[11px] text-slate-600">
                       <span className="h-2.5 w-2.5 shrink-0 rounded-[2px]" style={{ backgroundColor: store.color }} />
                       <span className="min-w-0 flex-1">{store.store}</span>
-                      <span className="font-medium tabular-nums">{count(store.total)}</span>
+                      <span className="font-medium tabular-nums whitespace-nowrap">{count(store.total)} ({orderShare(store.total, data.orders)})</span>
                     </div>
                   ))}
                 </div>
@@ -560,8 +768,9 @@ export default function ControlTower({ client }: { client: TowerClient }) {
                 angle={data.periods.length > 9 ? -25 : 0} textAnchor={data.periods.length > 9 ? "end" : "middle"}
                 height={data.periods.length > 9 ? 55 : 35} />
               <YAxis tick={{ fontSize: 11, fill: "#64748b" }} stroke="#cbd5e1" width={45} />
-              <Tooltip formatter={(value: number, name: string) => [count(Number(value)), name]}
-                contentStyle={{ fontSize: 12, border: "1px solid #e2e8f0" }} />
+              <Tooltip formatter={(value: number, name: string, entry: any) => [
+                `${count(Number(value))} (${orderShare(Number(value), Number(entry?.payload?.orders ?? 0))})`, name
+              ]} contentStyle={{ fontSize: 12, border: "1px solid #e2e8f0" }} />
               {orderServices.map((service, index) => (
                 <Bar key={service.key} dataKey={service.key} name={service.label}
                   stackId="services" fill={service.color}
@@ -575,7 +784,7 @@ export default function ControlTower({ client }: { client: TowerClient }) {
             <div key={service.key} className="flex items-center gap-3 border border-slate-100 bg-slate-50/80 px-3 py-3 text-xs">
               <span className="h-3.5 w-3.5 shrink-0 rounded-[2px]" style={{ backgroundColor: service.color }} />
               <span className="min-w-0 flex-1 font-medium text-slate-700">{service.label}</span>
-              <span className="text-sm font-semibold tabular-nums text-slate-900">{count(service.total)}</span>
+              <span className="text-sm font-semibold tabular-nums whitespace-nowrap text-slate-900">{count(service.total)} ({orderShare(service.total, data.orders)})</span>
             </div>
           ))}
         </div>
